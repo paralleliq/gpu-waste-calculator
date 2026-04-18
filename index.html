@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPU Waste Calculator — Paralleliq</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:   #00008B;
+      --purple: #7B35D4;
+      --blue:   #4A6CF7;
+      --cyan:   #00C4C4;
+      --bg:     #f4f6ff;
+      --card:   #ffffff;
+      --text:   #1a1a2e;
+      --muted:  #6b7280;
+      --border: #e0e4f0;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 16px 80px;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    header img {
+      height: 52px;
+      margin-bottom: 24px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 10px;
+    }
+
+    header p {
+      font-size: 1.05rem;
+      color: var(--muted);
+      max-width: 520px;
+      line-height: 1.6;
+    }
+
+    /* ── Card ────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 580px;
+      box-shadow: 0 4px 24px rgba(0,0,139,0.07);
+    }
+
+    /* ── Form ────────────────────────────────────────────── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    input, select {
+      padding: 11px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.97rem;
+      color: var(--text);
+      background: #fafbff;
+      transition: border-color 0.2s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+
+    .select-wrap {
+      position: relative;
+    }
+
+    .select-wrap::after {
+      content: "▾";
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+      font-size: 0.85rem;
+    }
+
+    /* ── Button ──────────────────────────────────────────── */
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: linear-gradient(90deg, var(--purple), var(--blue), var(--cyan));
+      color: #fff;
+      letter-spacing: 0.02em;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    button:hover { opacity: 0.92; }
+    button:active { transform: scale(0.99); }
+
+    /* ── Results ─────────────────────────────────────────── */
+    #results {
+      display: none;
+      margin-top: 32px;
+    }
+
+    #results.visible { display: block; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin-bottom: 28px;
+    }
+
+    .results-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    .waste-amount {
+      font-size: 2.6rem;
+      font-weight: 800;
+      background: linear-gradient(90deg, var(--purple), var(--blue), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+
+    .waste-sub {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .breakdown {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .breakdown-item {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .breakdown-item .bi-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 4px;
+    }
+
+    .breakdown-item .bi-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+
+    .signal-box {
+      background: linear-gradient(135deg, rgba(123,53,212,0.06), rgba(0,196,196,0.06));
+      border: 1px solid rgba(74,108,247,0.2);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .signal-box strong { color: var(--navy); }
+
+    /* ── CTA ─────────────────────────────────────────────── */
+    .cta-section {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    .cta-section p {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+
+    .cta-section a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    footer {
+      margin-top: 48px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    footer a { color: var(--blue); text-decoration: none; }
+
+    @media (max-width: 480px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .breakdown { grid-template-columns: 1fr; }
+      .card { padding: 24px 20px; }
+      .waste-amount { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="logo.png" alt="Paralleliq" />
+    <h1>GPU Waste Calculator</h1>
+    <p>Estimate how much your inference fleet is spending on avoidable GPU waste — misplacement, over-provisioning, and OOM risk.</p>
+  </header>
+
+  <div class="card">
+
+    <div class="form-grid">
+
+      <div class="field full">
+        <label>Number of GPU Nodes</label>
+        <input type="number" id="gpuCount" value="20" min="1" max="10000" />
+      </div>
+
+      <div class="field">
+        <label>Primary GPU Type</label>
+        <div class="select-wrap">
+          <select id="gpuType">
+            <option value="t4">NVIDIA T4</option>
+            <option value="l4" selected>NVIDIA L4</option>
+            <option value="a10">NVIDIA A10</option>
+            <option value="a100-40">NVIDIA A100 40GB</option>
+            <option value="a100-80">NVIDIA A100 80GB</option>
+            <option value="h100">NVIDIA H100</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Primary Model Size</label>
+        <div class="select-wrap">
+          <select id="modelSize">
+            <option value="7b">7B – 8B</option>
+            <option value="13b">13B</option>
+            <option value="22b">22B</option>
+            <option value="70b" selected>70B – 72B</option>
+            <option value="180b">180B+</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field full">
+        <label>Primary Workload Type</label>
+        <div class="select-wrap">
+          <select id="workloadType">
+            <option value="inference" selected>Inference</option>
+            <option value="training">Training</option>
+            <option value="mixed">Mixed</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+
+    <button onclick="calculate()">Calculate My GPU Waste</button>
+
+    <div id="results">
+      <hr class="divider" />
+
+      <div class="results-label">Estimated Annual GPU Waste</div>
+      <div class="waste-amount" id="wasteRange">—</div>
+      <div class="waste-sub" id="wasteSub">per year across your fleet</div>
+
+      <div class="breakdown">
+        <div class="breakdown-item">
+          <div class="bi-value" id="bdMisplacement">—</div>
+          <div class="bi-label">Tier Misplacement</div>
+        </div>
+        <div class="breakdown-item">
+          <div class="bi-value" id="bdOom">—</div>
+          <div class="bi-label">OOM Risk Overhead</div>
+        </div>
+        <div class="breakdown-item">
+          <div class="bi-value" id="bdOver">—</div>
+          <div class="bi-label">Over-Provisioning</div>
+        </div>
+      </div>
+
+      <div class="signal-box" id="signalBox"></div>
+
+      <button onclick="window.location.href='https://github.com/paralleliq/piqc'">
+        Get Your Exact Number — Run a Free Scan
+      </button>
+
+      <div class="cta-section">
+        <p>piqc scans your Kubernetes cluster in seconds. No agents, no instrumentation, nothing changes in your cluster.<br/>
+        <a href="mailto:sam@paralleliq.ai">Questions? sam@paralleliq.ai</a></p>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    © 2026 Paralleliq · <a href="https://paralleliq.ai">paralleliq.ai</a> · <a href="https://github.com/paralleliq/piqc">Open-source scanner</a>
+  </footer>
+
+  <script>
+    const GPU_COSTS  = { 't4':0.35, 'l4':0.54, 'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50 };
+    const GPU_TIERS  = { 't4':2,    'l4':3,     'a10':3,    'a100-40':5,    'a100-80':5,    'h100':6    };
+    const MODEL_TIERS= { '7b':3, '13b':3, '22b':4, '70b':5, '180b':6 };
+    const TIER_MIN_COST = { 2:0.35, 3:0.54, 4:0.90, 5:2.21, 6:3.50 };
+    const WORKLOAD_MULT = { 'inference':1.0, 'training':0.75, 'mixed':1.1 };
+
+    const GPU_LABELS  = { 't4':'T4', 'l4':'L4', 'a10':'A10', 'a100-40':'A100 40GB', 'a100-80':'A100 80GB', 'h100':'H100' };
+    const MODEL_LABELS= { '7b':'7B–8B', '13b':'13B', '22b':'22B', '70b':'70B–72B', '180b':'180B+' };
+
+    function fmt(n) {
+      if (n >= 1_000_000) return '$' + (n/1_000_000).toFixed(1) + 'M';
+      if (n >= 1_000)     return '$' + Math.round(n/1_000) + 'k';
+      return '$' + Math.round(n);
+    }
+
+    function calculate() {
+      const gpuCount    = Math.max(1, parseInt(document.getElementById('gpuCount').value) || 1);
+      const gpuType     = document.getElementById('gpuType').value;
+      const modelSize   = document.getElementById('modelSize').value;
+      const workload    = document.getElementById('workloadType').value;
+
+      const gpuCost     = GPU_COSTS[gpuType];
+      const gpuTier     = GPU_TIERS[gpuType];
+      const modelTier   = MODEL_TIERS[modelSize];
+      const wMult       = WORKLOAD_MULT[workload];
+      const hours       = 8760;
+
+      const totalSpend  = gpuCount * gpuCost * hours;
+
+      let misplace = 0, oom = 0, over = 0;
+      let signalMsg = '';
+
+      if (gpuTier > modelTier) {
+        // Over-provisioned
+        const minCost = TIER_MIN_COST[modelTier];
+        over     = gpuCount * 0.40 * (gpuCost - minCost) * hours;
+        misplace = totalSpend * 0.05;
+        signalMsg = `Your ${MODEL_LABELS[modelSize]} models only require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). <strong>~${Math.round(40)}% of your fleet is paying for GPU capacity it doesn't need.</strong> Moving to the right tier could free high-end GPUs for workloads that actually require them.`;
+      } else if (gpuTier < modelTier) {
+        // Under-tiered
+        oom      = totalSpend * 0.15;
+        misplace = totalSpend * 0.22;
+        signalMsg = `Your ${MODEL_LABELS[modelSize]} models require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). <strong>This is causing memory constraints, OOM kills, and severely limited batching.</strong> You're not just wasting money — your throughput is artificially capped.`;
+      } else {
+        // Correctly tiered — fleet variance
+        misplace = totalSpend * 0.08;
+        oom      = totalSpend * 0.04;
+        signalMsg = `Your primary model/GPU pairing looks correctly tiered. However, <strong>mixed fleets typically carry 8–15% waste from configuration drift, over-replicated workloads, and idle capacity.</strong> A full scan often surfaces more than the primary pairing suggests.`;
+      }
+
+      // Apply workload multiplier and fleet variance
+      const variance = totalSpend * 0.04;
+      misplace *= wMult;
+      oom      *= wMult;
+      over     *= wMult;
+
+      const totalLow  = Math.round((misplace + oom + over + variance) * 0.75);
+      const totalHigh = Math.round((misplace + oom + over + variance) * 1.30);
+
+      // Render
+      document.getElementById('wasteRange').textContent = `${fmt(totalLow)} — ${fmt(totalHigh)}`;
+      document.getElementById('wasteSub').textContent   =
+        `estimated annual waste across ${gpuCount} ${GPU_LABELS[gpuType]} node${gpuCount>1?'s':''}`;
+
+      document.getElementById('bdMisplacement').textContent = fmt(Math.round(misplace));
+      document.getElementById('bdOom').textContent          = fmt(Math.round(oom));
+      document.getElementById('bdOver').textContent         = fmt(Math.round(over));
+
+      document.getElementById('signalBox').innerHTML = signalMsg;
+
+      const results = document.getElementById('results');
+      results.classList.add('visible');
+      results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function tierName(tier) {
+      return { 2:'T4', 3:'L4 / A10', 4:'A10', 5:'A100', 6:'H100' }[tier] || 'unknown';
+    }
+  </script>
+
+</body>
+</html>
