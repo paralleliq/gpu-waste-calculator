@@ -421,7 +421,7 @@
         const minCost = TIER_MIN_COST[modelTier];
         over     = gpuCount * 0.40 * (gpuCost - minCost) * hours;
         misplace = totalSpend * 0.05;
-        signalMsg = `Your ${MODEL_LABELS[modelSize]} models only require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). <strong>~${Math.round(40)}% of your fleet is paying for GPU capacity it doesn't need.</strong> Moving to the right tier could free high-end GPUs for workloads that actually require them.`;
+        signalMsg = `Your ${MODEL_LABELS[modelSize]} models only require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). This may be intentional — larger GPUs provide headroom for traffic spikes, strict latency SLOs, or planned model upgrades. <strong>However, if that headroom isn't being used, you could be paying for capacity you don't need.</strong> A full scan shows actual utilization patterns so you can tell the difference between deliberate provisioning and genuine waste.`;
       } else if (gpuTier < modelTier) {
         // Under-tiered
         oom      = totalSpend * 0.15;
