@@ -269,6 +269,19 @@
     <div class="form-grid">
 
       <div class="field full">
+        <label>Cloud Provider</label>
+        <div class="select-wrap">
+          <select id="cloudProvider" onchange="updateGpuPrices()">
+            <option value="gcp" selected>Google Cloud (GCP)</option>
+            <option value="aws">Amazon Web Services (AWS)</option>
+            <option value="azure">Microsoft Azure</option>
+            <option value="coreweave">CoreWeave</option>
+            <option value="lambda">Lambda Labs</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field full">
         <label>Number of GPU Nodes</label>
         <input type="number" id="gpuCount" value="20" min="1" max="10000" />
       </div>
@@ -356,7 +369,20 @@
   </footer>
 
   <script>
-    const GPU_COSTS  = { 't4':0.35, 'l4':0.54, 'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50 };
+    const PROVIDER_COSTS = {
+      'gcp':       { 't4':0.35, 'l4':0.54,  'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50 },
+      'aws':       { 't4':0.53, 'l4':0.81,  'a10':1.01, 'a100-40':3.21, 'a100-80':4.10, 'h100':5.12 },
+      'azure':     { 't4':0.52, 'l4':0.78,  'a10':1.17, 'a100-40':3.06, 'a100-80':3.67, 'h100':4.77 },
+      'coreweave': { 't4':0.28, 'l4':0.43,  'a10':0.85, 'a100-40':2.06, 'a100-80':2.76, 'h100':2.95 },
+      'lambda':    { 't4':0.26, 'l4':0.40,  'a10':0.76, 'a100-40':1.99, 'a100-80':2.49, 'h100':2.49 },
+    };
+
+    let GPU_COSTS = { ...PROVIDER_COSTS['gcp'] };
+
+    function updateGpuPrices() {
+      const provider = document.getElementById('cloudProvider').value;
+      GPU_COSTS = { ...PROVIDER_COSTS[provider] };
+    }
     const GPU_TIERS  = { 't4':2,    'l4':3,     'a10':3,    'a100-40':5,    'a100-80':5,    'h100':6    };
     const MODEL_TIERS= { '7b':3, '13b':3, '22b':4, '70b':5, '180b':6 };
     const TIER_MIN_COST = { 2:0.35, 3:0.54, 4:0.90, 5:2.21, 6:3.50 };
