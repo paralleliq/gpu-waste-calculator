@@ -421,7 +421,7 @@
         const minCost = TIER_MIN_COST[modelTier];
         over     = gpuCount * 0.40 * (gpuCost - minCost) * hours;
         misplace = totalSpend * 0.05;
-        signalMsg = `Your ${MODEL_LABELS[modelSize]} models only require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). This may be intentional — larger GPUs provide headroom for traffic spikes, strict latency SLOs, or planned model upgrades. <strong>However, if that headroom isn't being used, you could be paying for capacity you don't need.</strong> A full scan shows actual utilization patterns so you can tell the difference between deliberate provisioning and genuine waste.`;
+        signalMsg = `Your ${MODEL_LABELS[modelSize]} models only require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). This may be intentional — larger GPUs provide headroom for traffic spikes or strict latency SLOs. <strong>However, horizontal scaling on lower-tier GPUs is often more cost-effective:</strong> multiple ${tierName(modelTier)} nodes at lower cost can match or exceed the throughput of a single ${GPU_LABELS[gpuType]}, while predictive autoscaling handles bursts without paying for peak capacity 24/7. A full scan shows actual utilization patterns so you can evaluate whether vertical over-provisioning or horizontal scaling better fits your workload.`;
       } else if (gpuTier < modelTier) {
         // Under-tiered
         oom      = totalSpend * 0.15;
