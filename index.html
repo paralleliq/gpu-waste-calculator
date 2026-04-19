@@ -336,10 +336,22 @@
         </div>
 
         <div class="field">
+          <label>GPU Tier</label>
+          <div class="select-wrap">
+            <select id="gpuTier">
+              <option value="entry">Entry — T4 / L4</option>
+              <option value="mid">Mid — A10 / A100 40GB</option>
+              <option value="highend">High-end — A100 80GB / H100</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field full">
           <label>Primary Use Case</label>
           <div class="select-wrap">
-            <select id="useCase">
-              <option value="inference" selected>LLM / AI Inference</option>
+            <select id="cfoUseCase">
+              <option value="small">LLM Inference — small models (7B–13B)</option>
+              <option value="large">LLM Inference — large models (70B+)</option>
               <option value="training">Model Training</option>
               <option value="mixed">Mixed Workloads</option>
             </select>
@@ -703,57 +715,111 @@
     }
 
     // ── CFO / Quick Estimate calculation ────────────────────
+    // Maps simplified tier and use-case selectors to real GPU specs and model
+    // sizes, then runs the same memory-based fit logic as the technical mode.
+    const CFO_GPU_MAP = {
+      'entry':   { key: 'l4',      mem: 24, label: 'L4 (24GB)'   },
+      'mid':     { key: 'a100-40', mem: 40, label: 'A100 40GB'   },
+      'highend': { key: 'h100',    mem: 80, label: 'H100 (80GB)' },
+    };
+    const CFO_USE_CASES = {
+      'small':    { modelSize: '13b', label: 'Small models (7B–13B)', training: false },
+      'large':    { modelSize: '70b', label: 'Large models (70B+)',   training: false },
+      'training': { modelSize: '70b', label: 'Training workloads',    training: true  },
+      'mixed':    { modelSize: '13b', label: 'Mixed workloads',       training: false },
+    };
+
     function calculateCfo() {
       const monthly  = parseFloat(document.getElementById('monthlySpend').value);
       const provider = document.getElementById('cfoProvider').value;
-      const useCase  = document.getElementById('useCase').value;
+      const gpuTier  = document.getElementById('gpuTier').value;
+      const useCase  = document.getElementById('cfoUseCase').value;
 
       if (!monthly || monthly <= 0) {
         document.getElementById('monthlySpend').focus();
         return;
       }
 
-      const annual = monthly * 12;
+      const annual      = monthly * 12;
+      const gpuSpec     = CFO_GPU_MAP[gpuTier];
+      const useCfg      = CFO_USE_CASES[useCase];
+      const gpuCost     = PROVIDER_COSTS[provider][gpuSpec.key];
+      const gpuMem      = gpuSpec.mem;
+      const modelMem    = MODEL_MEMORY[useCfg.modelSize]['fp16'];
+      // Derive implied node count from monthly spend and GPU hourly rate
+      const impliedNodes = Math.max(1, Math.round(monthly / (gpuCost * 730)));
 
-      // Industry-observed waste ranges by workload type
-      const WASTE = {
-        'inference': { low: 0.20, high: 0.35 },
-        'training':  { low: 0.12, high: 0.22 },
-        'mixed':     { low: 0.18, high: 0.30 },
-      };
-      const USE_LABELS = {
-        'inference': 'LLM inference',
-        'training':  'model training',
-        'mixed':     'mixed workloads',
-      };
+      let misplace = 0, oom = 0, over = 0, signalMsg = '';
 
-      const w         = WASTE[useCase];
-      const wasteLow  = annual * w.low;
-      const wasteHigh = annual * w.high;
-      const wasteMid  = (wasteLow + wasteHigh) / 2;
+      if (useCfg.training) {
+        // Training: scheduling gaps, checkpoint I/O, idle replicas between jobs
+        const wastePct = gpuTier === 'highend' ? 0.20 : 0.15;
+        misplace = annual * wastePct;
+        signalMsg = `Training fleets typically waste 15–20% through job scheduling gaps, checkpoint I/O stalls, and idle replicas between runs. ` +
+          `On ${gpuSpec.label} hardware, fragmented allocation and reservation overhead add further cost. ` +
+          `<strong>A free scan identifies which jobs and nodes are carrying the most idle time.</strong>`;
 
-      // Equivalent idle nodes — use A100 40GB as reference inference GPU for the provider
-      const refHourly = PROVIDER_COSTS[provider]['a100-40'];
-      const idleNodes = Math.max(1, Math.round(wasteMid / (refHourly * 8760)));
+      } else if (modelMem > 80 && gpuMem <= 80) {
+        // Model requires multi-GPU — single card cannot fit weights
+        misplace = annual * 0.30;
+        oom      = annual * 0.20;
+        signalMsg = `<strong>Tier mismatch detected.</strong> ${useCfg.label} at fp16 require ~${modelMem}GB VRAM — ` +
+          `no single ${gpuSpec.label} can fit this model. If workloads are running on single GPUs, ` +
+          `expect OOM failures and wasted compute. This configuration requires multi-GPU tensor parallelism.`;
 
-      const pctLow  = Math.round(w.low  * 100);
-      const pctHigh = Math.round(w.high * 100);
+      } else if (modelMem > gpuMem) {
+        // Under-tiered — model doesn't fit in GPU memory
+        misplace = annual * 0.22;
+        oom      = annual * 0.15;
+        const minFit = getMinFitGpu(modelMem);
+        signalMsg = `<strong>Tier mismatch detected.</strong> ${MODEL_LABELS[useCfg.modelSize]} models require ~${modelMem}GB VRAM, ` +
+          `but ${gpuSpec.label} only has ${gpuMem}GB. Expect OOM kills, failed requests, and degraded throughput. ` +
+          `Minimum GPU needed: <strong>${minFit ? minFit.label : 'multi-GPU setup'}</strong>.`;
+
+      } else {
+        // Model fits — check if a cheaper tier would also work
+        const minGpu  = getMinFitGpu(modelMem);
+        const minCost = minGpu ? PROVIDER_COSTS[provider][minGpu.key] : gpuCost;
+
+        if (minGpu && minCost < gpuCost * 0.92) {
+          const delta = gpuCost - minCost;
+          over = impliedNodes * delta * 8760;
+          signalMsg = `${MODEL_LABELS[useCfg.modelSize]} models fit comfortably on a <strong>${minGpu.label} at $${minCost.toFixed(2)}/hr</strong>, ` +
+            `but you're running ${gpuSpec.label} at $${gpuCost.toFixed(2)}/hr — a <strong>$${delta.toFixed(2)}/hr delta per node.</strong> ` +
+            `This may be intentional for headroom or latency SLOs, but predictive autoscaling on lower-tier hardware ` +
+            `is often more cost-effective than permanent vertical over-provisioning.`;
+        } else {
+          // Correct fit
+          signalMsg = `Your GPU tier is a reasonable fit for this workload. Waste at this level typically comes from ` +
+            `configuration drift, idle replicas, and suboptimal batching across the fleet — ` +
+            `factors only visible through a runtime scan. <strong>A full scan gives you the exact breakdown.</strong>`;
+        }
+      }
+
+      const total     = misplace + oom + over;
+      const totalLow  = Math.round(total * 0.75);
+      const totalHigh = Math.round(total * 1.30);
+      const wasteMid  = (totalLow + totalHigh) / 2;
+      const wastePct  = annual > 0 ? Math.round((wasteMid / annual) * 100) : 0;
+      const idleNodes = total > 0 ? Math.max(1, Math.round(wasteMid / (gpuCost * 8760))) : 0;
 
       const monthlyFmt = monthly >= 1000
-        ? `$${(monthly/1000).toFixed(0)}k/mo`
+        ? `$${(monthly / 1000).toFixed(0)}k/mo`
         : `$${Math.round(monthly)}/mo`;
 
-      document.getElementById('cfoWasteRange').textContent =
-        `${fmt(Math.round(wasteLow))} — ${fmt(Math.round(wasteHigh))}`;
-      document.getElementById('cfoWasteSub').textContent =
-        `estimated waste per year on ${monthlyFmt} GPU spend`;
-      document.getElementById('cfoPct').textContent    = `${pctLow}–${pctHigh}%`;
-      document.getElementById('cfoNodes').textContent  = `~${idleNodes}`;
-      document.getElementById('cfoSignal').innerHTML   =
-        `Fleets running ${USE_LABELS[useCase]} typically carry ${pctLow}–${pctHigh}% waste from tier misplacement, over-provisioning, and memory pressure events. ` +
-        `That's the equivalent of <strong>~${idleNodes} GPU nodes running idle around the clock.</strong> ` +
-        `A free piqc scan identifies exactly which workloads are contributing — no agents or instrumentation required.`;
+      if (total === 0) {
+        document.getElementById('cfoWasteRange').textContent = 'Run a Free Scan';
+        document.getElementById('cfoWasteSub').textContent   = 'configuration looks reasonable — scan for hidden waste';
+        document.getElementById('cfoPct').textContent        = '—';
+        document.getElementById('cfoNodes').textContent      = '—';
+      } else {
+        document.getElementById('cfoWasteRange').textContent = `${fmt(totalLow)} — ${fmt(totalHigh)}`;
+        document.getElementById('cfoWasteSub').textContent   = `estimated waste per year on ${monthlyFmt} GPU spend`;
+        document.getElementById('cfoPct').textContent        = `~${wastePct}%`;
+        document.getElementById('cfoNodes').textContent      = `~${idleNodes}`;
+      }
 
+      document.getElementById('cfoSignal').innerHTML  = signalMsg;
       document.getElementById('cfoResults').style.display = 'block';
       document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
