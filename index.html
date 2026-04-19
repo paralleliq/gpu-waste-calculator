@@ -294,7 +294,7 @@
           <select id="gpuType">
             <option value="t4">NVIDIA T4</option>
             <option value="l4" selected>NVIDIA L4</option>
-            <option value="a10">NVIDIA A10</option>
+            <option value="a10">NVIDIA A10 (48GB)</option>
             <option value="a100-40">NVIDIA A100 40GB</option>
             <option value="a100-80">NVIDIA A100 80GB</option>
             <option value="h100">NVIDIA H100</option>
@@ -309,6 +309,7 @@
             <option value="7b">7B – 8B</option>
             <option value="13b">13B</option>
             <option value="22b">22B</option>
+            <option value="30b">30B – 40B</option>
             <option value="70b" selected>70B – 72B</option>
             <option value="180b">180B+</option>
           </select>
@@ -385,13 +386,13 @@
       const provider = document.getElementById('cloudProvider').value;
       GPU_COSTS = { ...PROVIDER_COSTS[provider] };
     }
-    const GPU_TIERS  = { 't4':2,    'l4':3,     'a10':3,    'a100-40':5,    'a100-80':5,    'h100':6    };
-    const MODEL_TIERS= { '7b':3, '13b':3, '22b':4, '70b':5, '180b':6 };
+    const GPU_TIERS  = { 't4':2,    'l4':3,     'a10':4,    'a100-40':5,    'a100-80':5,    'h100':6    };
+    const MODEL_TIERS= { '7b':3, '13b':3, '22b':4, '30b':4, '70b':5, '180b':6 };
     const TIER_MIN_COST = { 2:0.35, 3:0.54, 4:0.90, 5:2.21, 6:3.50 };
     const WORKLOAD_MULT = { 'inference':1.0, 'training':0.75, 'mixed':1.1 };
 
     const GPU_LABELS  = { 't4':'T4', 'l4':'L4', 'a10':'A10', 'a100-40':'A100 40GB', 'a100-80':'A100 80GB', 'h100':'H100' };
-    const MODEL_LABELS= { '7b':'7B–8B', '13b':'13B', '22b':'22B', '70b':'70B–72B', '180b':'180B+' };
+    const MODEL_LABELS= { '7b':'7B–8B', '13b':'13B', '22b':'22B', '30b':'30B–40B', '70b':'70B–72B', '180b':'180B+' };
 
     function fmt(n) {
       if (n >= 1_000_000) return '$' + (n/1_000_000).toFixed(1) + 'M';
@@ -465,7 +466,7 @@
     }
 
     function tierName(tier) {
-      return { 2:'T4', 3:'L4 / A10', 4:'A10', 5:'A100', 6:'H100' }[tier] || 'unknown';
+      return { 2:'T4', 3:'L4', 4:'A10', 5:'A100', 6:'H100' }[tier] || 'unknown';
     }
   </script>
 
