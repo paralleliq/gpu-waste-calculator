@@ -184,7 +184,7 @@
 
     .breakdown {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 12px;
       margin-bottom: 28px;
     }
@@ -208,6 +208,19 @@
       font-size: 0.75rem;
       color: var(--muted);
       line-height: 1.3;
+    }
+
+    .breakdown-item[data-state="ok"]   .bi-value { color: #4ade80; }
+    .breakdown-item[data-state="warn"] .bi-value { color: #fbbf24; }
+    .breakdown-item[data-state="risk"] .bi-value { color: #f87171; }
+
+    .caveat {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.55;
+      margin-bottom: 20px;
+      padding: 10px 14px;
+      border-left: 2px solid var(--border);
     }
 
     .signal-box {
@@ -338,6 +351,24 @@
         </div>
       </div>
 
+      <div class="field">
+        <label>Max Sequence Length</label>
+        <div class="select-wrap">
+          <select id="seqLen">
+            <option value="512">512 tokens</option>
+            <option value="1024">1K tokens</option>
+            <option value="2048" selected>2K tokens</option>
+            <option value="4096">4K tokens</option>
+            <option value="8192">8K tokens</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Peak Concurrent Batch</label>
+        <input type="number" id="batchSize" value="8" min="1" max="256" />
+      </div>
+
     </div>
 
     <button onclick="calculate()">Calculate My GPU Waste</button>
@@ -362,9 +393,15 @@
           <div class="bi-value" id="bdOver">—</div>
           <div class="bi-label">Over-Provisioning</div>
         </div>
+        <div class="breakdown-item" id="bdKvItem">
+          <div class="bi-value" id="bdKv">—</div>
+          <div class="bi-label">KV Cache Headroom</div>
+        </div>
       </div>
 
       <div class="signal-box" id="signalBox"></div>
+
+      <div class="caveat" id="kvCaveat"></div>
 
       <button onclick="window.location.href='https://github.com/paralleliq/piqc'">
         Get Your Exact Number — Run a Free Scan
@@ -425,6 +462,14 @@
     const QUANT_LABELS = { 'fp16':'fp16/bf16','int8':'int8','int4':'int4' };
     const WORKLOAD_MULT = { 'inference':1.0, 'training':0.75, 'mixed':1.1 };
 
+    // ── KV cache per token (MB, fp16 regardless of weight quant) ──
+    // Derived from: 2 × layers × num_kv_heads × head_dim × 2 bytes
+    // Models: 7B=32L/32H/128D, 13B=40L/40H/128D, 22B=48L/48H/128D,
+    //         30B=60L/52H/128D, 70B=80L/64H/128D, 180B=96L/96H/128D
+    const KV_PER_TOKEN_MB = {
+      '7b': 0.50, '13b': 0.82, '22b': 1.57, '30b': 2.02, '70b': 2.62, '180b': 6.29
+    };
+
     // ── Helpers ──────────────────────────────────────────────
     function fmt(n) {
       if (n >= 1_000_000) return '$' + (n/1_000_000).toFixed(1) + 'M';
@@ -447,16 +492,25 @@
       const modelSize = document.getElementById('modelSize').value;
       const quant     = document.getElementById('quantization').value;
       const workload  = document.getElementById('workloadType').value;
+      const seqLen    = parseInt(document.getElementById('seqLen').value);
+      const batchSize = Math.max(1, parseInt(document.getElementById('batchSize').value) || 1);
 
-      const gpuCost   = GPU_COSTS[gpuType];
-      const gpuSpec   = GPU_SPECS.find(s => s.key === gpuType);
-      const gpuMem    = gpuSpec.mem;
-      const modelMem  = MODEL_MEMORY[modelSize][quant];
-      const wMult     = WORKLOAD_MULT[workload];
-      const hours     = 8760;
+      const gpuCost    = GPU_COSTS[gpuType];
+      const gpuSpec    = GPU_SPECS.find(s => s.key === gpuType);
+      const gpuMem     = gpuSpec.mem;
+      const modelMem   = MODEL_MEMORY[modelSize][quant];
+      const wMult      = WORKLOAD_MULT[workload];
+      const hours      = 8760;
       const totalSpend = gpuCount * gpuCost * hours;
 
-      let misplace = 0, oom = 0, over = 0, signalMsg = '';
+      // ── KV cache headroom ──────────────────────────────────
+      // KV cache is typically stored in fp16 regardless of weight quantization
+      const kvCacheGB      = (KV_PER_TOKEN_MB[modelSize] * seqLen * batchSize) / 1024;
+      const weightHeadroom = Math.max(0, gpuMem - modelMem);   // GB free after weights
+      const kvRatio        = weightHeadroom > 0 ? kvCacheGB / weightHeadroom : 999;
+      // kvRatio: <0.7 = ok, 0.7–1.0 = tight, >1.0 = will OOM under this load
+
+      let misplace = 0, oom = 0, over = 0, signalMsg = '', kvExtra = '';
 
       if (modelMem > 80 && gpuMem <= 80) {
         // Multi-GPU required — single GPU can never fit
@@ -472,7 +526,7 @@
 
       } else {
         // Model fits — check if a cheaper GPU would also fit
-        const minGpu = getMinFitGpu(modelMem);
+        const minGpu  = getMinFitGpu(modelMem);
         const minCost = minGpu ? GPU_COSTS[minGpu.key] : gpuCost;
 
         if (minGpu && minCost < gpuCost * 0.92) {
@@ -482,19 +536,54 @@
           signalMsg = `A ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB of VRAM — it fits on a <strong>${minGpu.label} at $${minCost.toFixed(2)}/hr</strong>, but you're running it on ${GPU_LABELS[gpuType]} at $${gpuCost.toFixed(2)}/hr. That's a <strong>$${delta.toFixed(2)}/hr delta per node.</strong> This may be intentional for traffic spikes or latency SLOs — horizontal scaling on lower-tier GPUs with predictive autoscaling is often more cost-effective than permanent vertical over-provisioning. A full scan shows actual utilization so you can confirm whether the headroom is being used.`;
 
         } else {
-          // Correctly provisioned
+          // Correctly provisioned for weights
           signalMsg = `Your ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB — ${GPU_LABELS[gpuType]} (${gpuMem}GB) is a <strong>correct fit</strong> for this workload. This does not mean your fleet is waste-free. Other model/GPU combinations, idle replicas, and configuration drift across your full fleet can still carry significant waste. A full scan gives you the complete picture.`;
         }
+
+        // KV cache OOM risk (only relevant when weights fit)
+        if (kvRatio > 1.0) {
+          oom += totalSpend * 0.12;
+          kvExtra = ` <strong>KV cache alert:</strong> at batch=${batchSize} / seq=${seqLen} tokens, the KV cache alone needs ~${kvCacheGB.toFixed(1)}GB but only ${weightHeadroom.toFixed(1)}GB remains after weights — <strong>this will OOM under production load.</strong> Reduce batch size, sequence length, or move to a GPU with more VRAM headroom.`;
+        } else if (kvRatio > 0.70) {
+          kvExtra = ` <strong>KV cache is tight:</strong> at batch=${batchSize} / seq=${seqLen} tokens, the KV cache needs ~${kvCacheGB.toFixed(1)}GB of the ${weightHeadroom.toFixed(1)}GB remaining after weights (${Math.round(kvRatio*100)}% utilised). Traffic spikes or longer sequences could trigger OOM events.`;
+        }
       }
+
+      if (kvExtra) signalMsg += '<br/><br/>' + kvExtra;
 
       // Apply workload multiplier
       misplace *= wMult;
       oom      *= wMult;
       over     *= wMult;
 
-      const total = misplace + oom + over;
+      const total     = misplace + oom + over;
       const totalLow  = Math.round(total * 0.75);
       const totalHigh = Math.round(total * 1.30);
+
+      // ── KV cache tile ────────────────────────────────────────
+      const kvEl   = document.getElementById('bdKv');
+      const kvItem = document.getElementById('bdKvItem');
+      if (modelMem > gpuMem) {
+        // Model doesn't fit — KV cache is moot
+        kvEl.textContent = 'N/A';
+        kvItem.removeAttribute('data-state');
+      } else if (kvRatio > 1.0) {
+        kvEl.textContent = 'OOM Risk';
+        kvItem.setAttribute('data-state', 'risk');
+      } else if (kvRatio > 0.70) {
+        kvEl.textContent = `${weightHeadroom.toFixed(1)}GB (tight)`;
+        kvItem.setAttribute('data-state', 'warn');
+      } else {
+        kvEl.textContent = `${weightHeadroom.toFixed(1)}GB free`;
+        kvItem.setAttribute('data-state', 'ok');
+      }
+
+      // ── Caveat ───────────────────────────────────────────────
+      const kvGB_fmt = kvCacheGB.toFixed(1);
+      document.getElementById('kvCaveat').innerHTML =
+        `<em>Weight estimate only.</em> Total VRAM = weights + KV cache (seq × batch × layers × heads) + activations + runtime overhead. ` +
+        `At batch=${batchSize} / seq=${seqLen.toLocaleString()} tokens, KV cache ≈ ${kvGB_fmt}GB on top of ${modelMem}GB weights. ` +
+        `Run a full scan to measure actual runtime headroom.`;
 
       // ── Render ──────────────────────────────────────────────
       if (total === 0) {
