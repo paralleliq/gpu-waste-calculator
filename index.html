@@ -240,6 +240,54 @@
     .breakdown-item[data-state="warn"] .bi-value { color: #fbbf24; }
     .breakdown-item[data-state="risk"] .bi-value { color: #f87171; }
 
+    /* ── Assumptions tooltip ────────────────────────────────── */
+    .waste-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .tooltip-wrap { position: relative; display: inline-block; }
+
+    .tooltip-icon {
+      width: auto;
+      padding: 2px 4px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1rem;
+      cursor: pointer;
+      opacity: 0.5;
+      transition: opacity 0.2s;
+      line-height: 1;
+      letter-spacing: 0;
+      font-weight: 400;
+    }
+
+    .tooltip-icon:hover  { opacity: 1; transform: none; }
+    .tooltip-icon:active { transform: none; }
+
+    .tooltip-body {
+      display: none;
+      position: absolute;
+      left: 0;
+      top: calc(100% + 8px);
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.9;
+      white-space: nowrap;
+      z-index: 20;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      min-width: 260px;
+    }
+
+    .tooltip-wrap.open .tooltip-body { display: block; }
+
     .caveat {
       font-size: 0.78rem;
       color: var(--muted);
@@ -463,7 +511,13 @@
       <div id="cfoResults" style="display:none">
         <hr class="divider" />
         <div class="results-label">Estimated Annual GPU Waste</div>
-        <div class="waste-amount" id="cfoWasteRange">—</div>
+        <div class="waste-header">
+          <div class="waste-amount" id="cfoWasteRange">—</div>
+          <div class="tooltip-wrap" id="assumptionsWrap">
+            <button class="tooltip-icon" onclick="toggleAssumptions(event)">ⓘ</button>
+            <div class="tooltip-body" id="assumptionsBody"></div>
+          </div>
+        </div>
         <div class="waste-sub" id="cfoWasteSub">per year</div>
         <div class="breakdown" style="grid-template-columns:1fr 1fr">
           <div class="breakdown-item">
@@ -751,9 +805,9 @@
       const impliedNodes = Math.max(1, Math.round(monthly / (gpuCost * 730)));
 
       let misplace = 0, oom = 0, over = 0, signalMsg = '';
+      let minGpu = null, minCost = gpuCost, delta = 0;
 
       if (useCfg.training) {
-        // Training: scheduling gaps, checkpoint I/O, idle replicas between jobs
         const wastePct = gpuTier === 'highend' ? 0.20 : 0.15;
         misplace = annual * wastePct;
         signalMsg = `Training fleets typically waste 15–20% through job scheduling gaps, checkpoint I/O stalls, and idle replicas between runs. ` +
@@ -761,15 +815,13 @@
           `<strong>A free scan identifies which jobs and nodes are carrying the most idle time.</strong>`;
 
       } else if (modelMem > 80 && gpuMem <= 80) {
-        // Model requires multi-GPU — single card cannot fit weights
         misplace = annual * 0.30;
         oom      = annual * 0.20;
-        signalMsg = `<strong>Tier mismatch detected.</strong> ${useCfg.label} at fp16 require ~${modelMem}GB VRAM — ` +
+        signalMsg = `<strong>Tier mismatch detected.</strong> ${useCfg.label} at ${useCfg.quant} require ~${modelMem}GB VRAM — ` +
           `no single ${gpuSpec.label} can fit this model. If workloads are running on single GPUs, ` +
           `expect OOM failures and wasted compute. This configuration requires multi-GPU tensor parallelism.`;
 
       } else if (modelMem > gpuMem) {
-        // Under-tiered — model doesn't fit in GPU memory
         misplace = annual * 0.22;
         oom      = annual * 0.15;
         const minFit = getMinFitGpu(modelMem);
@@ -778,24 +830,39 @@
           `Minimum GPU needed: <strong>${minFit ? minFit.label : 'multi-GPU setup'}</strong>.`;
 
       } else {
-        // Model fits — check if a cheaper tier would also work
-        const minGpu  = getMinFitGpu(modelMem);
-        const minCost = minGpu ? PROVIDER_COSTS[provider][minGpu.key] : gpuCost;
+        minGpu  = getMinFitGpu(modelMem);
+        minCost = minGpu ? PROVIDER_COSTS[provider][minGpu.key] : gpuCost;
 
         if (minGpu && minCost < gpuCost * 0.92) {
-          const delta = gpuCost - minCost;
-          over = impliedNodes * delta * 8760;
+          delta = gpuCost - minCost;
+          over  = impliedNodes * delta * 8760;
           signalMsg = `${MODEL_LABELS[useCfg.modelSize]} models fit comfortably on a <strong>${minGpu.label} at $${minCost.toFixed(2)}/hr</strong>, ` +
             `but you're running ${gpuSpec.label} at $${gpuCost.toFixed(2)}/hr — a <strong>$${delta.toFixed(2)}/hr delta per node.</strong> ` +
             `This may be intentional for headroom or latency SLOs, but predictive autoscaling on lower-tier hardware ` +
             `is often more cost-effective than permanent vertical over-provisioning.`;
         } else {
-          // Correct fit
           signalMsg = `Your GPU tier is a reasonable fit for this workload. Waste at this level typically comes from ` +
             `configuration drift, idle replicas, and suboptimal batching across the fleet — ` +
             `factors only visible through a runtime scan. <strong>A full scan gives you the exact breakdown.</strong>`;
         }
       }
+
+      // ── Populate assumptions tooltip ─────────────────────────
+      const quantLabel = useCfg.quant === 'int8' ? 'int8 — typical production' : 'fp16 — full precision';
+      let aHtml =
+        `<strong style="color:var(--text)">Assumptions</strong><br/>` +
+        `GPU:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${gpuSpec.label} @ $${gpuCost.toFixed(2)}/hr (${provider.toUpperCase()})<br/>` +
+        `Model memory:&nbsp;${modelMem}GB &nbsp;(${MODEL_LABELS[useCfg.modelSize]}, ${quantLabel})<br/>` +
+        `Implied nodes:&nbsp;${impliedNodes} &nbsp;($${Math.round(monthly/1000)}k/mo ÷ $${gpuCost.toFixed(2)}/hr)`;
+      if (over > 0 && minGpu) {
+        aHtml +=
+          `<br/>Min fit GPU:&nbsp;&nbsp;${minGpu.label} @ $${minCost.toFixed(2)}/hr` +
+          `<br/>Cost delta:&nbsp;&nbsp;&nbsp;$${delta.toFixed(2)}/hr × ${impliedNodes} nodes × 8,760 hrs`;
+      } else if (misplace > 0 || oom > 0) {
+        aHtml += `<br/>Issue:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${modelMem}GB required > ${gpuMem}GB available`;
+      }
+      document.getElementById('assumptionsBody').innerHTML = aHtml;
+      document.getElementById('assumptionsWrap').classList.remove('open');
 
       const total     = misplace + oom + over;
       const totalLow  = Math.round(total * 0.75);
@@ -824,6 +891,17 @@
       document.getElementById('cfoResults').style.display = 'block';
       document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+
+    // ── Assumptions tooltip ──────────────────────────────────
+    function toggleAssumptions(e) {
+      e.stopPropagation();
+      document.getElementById('assumptionsWrap').classList.toggle('open');
+    }
+
+    document.addEventListener('click', function() {
+      const w = document.getElementById('assumptionsWrap');
+      if (w) w.classList.remove('open');
+    });
 
     // ── Mode toggle ──────────────────────────────────────────
     function setMode(mode) {
