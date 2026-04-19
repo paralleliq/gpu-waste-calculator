@@ -261,7 +261,7 @@
 <body>
 
   <header>
-    <img src="piqc_logo.png" alt="Paralleliq" />
+    <img src="logo.png" alt="Paralleliq" />
     <h1>GPU Waste Calculator</h1>
     <p>Estimate how much your inference fleet is spending on avoidable GPU waste — misplacement, over-provisioning, and OOM risk.</p>
   </header>
@@ -312,6 +312,17 @@
             <option value="30b">30B – 40B</option>
             <option value="70b" selected>70B – 72B</option>
             <option value="180b">180B+</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Quantization</label>
+        <div class="select-wrap">
+          <select id="quantization">
+            <option value="fp16">fp16 / bf16 (full precision)</option>
+            <option value="int8">int8 (8-bit)</option>
+            <option value="int4">int4 (4-bit GPTQ/AWQ)</option>
           </select>
         </div>
       </div>
@@ -372,67 +383,108 @@
   </footer>
 
   <script>
+    // ── Provider pricing ────────────────────────────────────
     const PROVIDER_COSTS = {
-      'gcp':       { 't4':0.35, 'l4':0.54,  'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50 },
-      'aws':       { 't4':0.53, 'l4':0.81,  'a10':1.01, 'a100-40':3.21, 'a100-80':4.10, 'h100':5.12 },
-      'azure':     { 't4':0.52, 'l4':0.78,  'a10':1.17, 'a100-40':3.06, 'a100-80':3.67, 'h100':4.77 },
-      'coreweave': { 't4':0.28, 'l4':0.43,  'a10':0.85, 'a100-40':2.06, 'a100-80':2.76, 'h100':2.95 },
-      'lambda':    { 't4':0.26, 'l4':0.40,  'a10':0.76, 'a100-40':1.99, 'a100-80':2.49, 'h100':2.49 },
+      'gcp':       { 't4':0.35, 'l4':0.54, 'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50 },
+      'aws':       { 't4':0.53, 'l4':0.81, 'a10':1.01, 'a100-40':3.21, 'a100-80':4.10, 'h100':5.12 },
+      'azure':     { 't4':0.52, 'l4':0.78, 'a10':1.17, 'a100-40':3.06, 'a100-80':3.67, 'h100':4.77 },
+      'coreweave': { 't4':0.28, 'l4':0.43, 'a10':0.85, 'a100-40':2.06, 'a100-80':2.76, 'h100':2.95 },
+      'lambda':    { 't4':0.26, 'l4':0.40, 'a10':0.76, 'a100-40':1.99, 'a100-80':2.49, 'h100':2.49 },
     };
 
     let GPU_COSTS = { ...PROVIDER_COSTS['gcp'] };
 
     function updateGpuPrices() {
-      const provider = document.getElementById('cloudProvider').value;
-      GPU_COSTS = { ...PROVIDER_COSTS[provider] };
+      GPU_COSTS = { ...PROVIDER_COSTS[document.getElementById('cloudProvider').value] };
     }
-    const GPU_TIERS  = { 't4':2,    'l4':3,     'a10':4,    'a100-40':5,    'a100-80':5,    'h100':6    };
-    const MODEL_TIERS= { '7b':3, '13b':3, '22b':4, '30b':4, '70b':5, '180b':6 };
-    const TIER_MIN_COST = { 2:0.35, 3:0.54, 4:0.90, 5:2.21, 6:3.50 };
+
+    // ── GPU specs ────────────────────────────────────────────
+    // Ordered cheapest → most expensive (used to find min-fit GPU)
+    const GPU_SPECS = [
+      { key:'t4',      mem:16,  label:'T4 (16GB)'      },
+      { key:'l4',      mem:24,  label:'L4 (24GB)'      },
+      { key:'a10',     mem:24,  label:'A10 (24GB)'     },
+      { key:'a100-40', mem:40,  label:'A100 40GB'      },
+      { key:'a100-80', mem:80,  label:'A100 80GB'      },
+      { key:'h100',    mem:80,  label:'H100 (80GB)'    },
+    ];
+
+    const GPU_LABELS = { 't4':'T4','l4':'L4','a10':'A10','a100-40':'A100 40GB','a100-80':'A100 80GB','h100':'H100' };
+
+    // ── Model VRAM requirements by quantization (GB) ─────────
+    const MODEL_MEMORY = {
+      '7b':  { 'fp16':14,  'int8':7,   'int4':4  },
+      '13b': { 'fp16':26,  'int8':13,  'int4':7  },
+      '22b': { 'fp16':44,  'int8':22,  'int4':11 },
+      '30b': { 'fp16':60,  'int8':30,  'int4':15 },
+      '70b': { 'fp16':140, 'int8':70,  'int4':35 },
+      '180b':{ 'fp16':360, 'int8':180, 'int4':90 },
+    };
+
+    const MODEL_LABELS = { '7b':'7B–8B','13b':'13B','22b':'22B','30b':'30B–40B','70b':'70B–72B','180b':'180B+' };
+    const QUANT_LABELS = { 'fp16':'fp16/bf16','int8':'int8','int4':'int4' };
     const WORKLOAD_MULT = { 'inference':1.0, 'training':0.75, 'mixed':1.1 };
 
-    const GPU_LABELS  = { 't4':'T4', 'l4':'L4', 'a10':'A10', 'a100-40':'A100 40GB', 'a100-80':'A100 80GB', 'h100':'H100' };
-    const MODEL_LABELS= { '7b':'7B–8B', '13b':'13B', '22b':'22B', '30b':'30B–40B', '70b':'70B–72B', '180b':'180B+' };
-
+    // ── Helpers ──────────────────────────────────────────────
     function fmt(n) {
       if (n >= 1_000_000) return '$' + (n/1_000_000).toFixed(1) + 'M';
       if (n >= 1_000)     return '$' + Math.round(n/1_000) + 'k';
       return '$' + Math.round(n);
     }
 
+    function getMinFitGpu(requiredMemGB) {
+      // Returns cheapest GPU spec whose memory >= required
+      for (const spec of GPU_SPECS) {
+        if (spec.mem >= requiredMemGB) return spec;
+      }
+      return null; // requires multi-GPU
+    }
+
+    // ── Main calculation ─────────────────────────────────────
     function calculate() {
-      const gpuCount    = Math.max(1, parseInt(document.getElementById('gpuCount').value) || 1);
-      const gpuType     = document.getElementById('gpuType').value;
-      const modelSize   = document.getElementById('modelSize').value;
-      const workload    = document.getElementById('workloadType').value;
+      const gpuCount  = Math.max(1, parseInt(document.getElementById('gpuCount').value) || 1);
+      const gpuType   = document.getElementById('gpuType').value;
+      const modelSize = document.getElementById('modelSize').value;
+      const quant     = document.getElementById('quantization').value;
+      const workload  = document.getElementById('workloadType').value;
 
-      const gpuCost     = GPU_COSTS[gpuType];
-      const gpuTier     = GPU_TIERS[gpuType];
-      const modelTier   = MODEL_TIERS[modelSize];
-      const wMult       = WORKLOAD_MULT[workload];
-      const hours       = 8760;
+      const gpuCost   = GPU_COSTS[gpuType];
+      const gpuSpec   = GPU_SPECS.find(s => s.key === gpuType);
+      const gpuMem    = gpuSpec.mem;
+      const modelMem  = MODEL_MEMORY[modelSize][quant];
+      const wMult     = WORKLOAD_MULT[workload];
+      const hours     = 8760;
+      const totalSpend = gpuCount * gpuCost * hours;
 
-      const totalSpend  = gpuCount * gpuCost * hours;
+      let misplace = 0, oom = 0, over = 0, signalMsg = '';
 
-      let misplace = 0, oom = 0, over = 0;
-      let signalMsg = '';
+      if (modelMem > 80 && gpuMem <= 80) {
+        // Multi-GPU required — single GPU can never fit
+        misplace = totalSpend * 0.30;
+        oom      = totalSpend * 0.20;
+        signalMsg = `A ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB of VRAM — <strong>no single GPU can fit this model.</strong> This workload requires tensor parallelism across multiple GPUs. If you're running it on a single ${GPU_LABELS[gpuType]}, it will crash with OOM errors. Estimated waste reflects the cost of failed and restarted inference jobs.`;
 
-      if (gpuTier > modelTier) {
-        // Over-provisioned — full cost delta is the waste
-        const minCost = TIER_MIN_COST[modelTier];
-        const costDeltaPerNode = gpuCost - minCost;
-        over     = gpuCount * costDeltaPerNode * hours;
-        signalMsg = `Your ${MODEL_LABELS[modelSize]} models only require a tier-${modelTier} GPU (${tierName(modelTier)}) at ~$${minCost.toFixed(2)}/hr, but you're running them on ${GPU_LABELS[gpuType]} at $${gpuCost.toFixed(2)}/hr — a <strong>$${costDeltaPerNode.toFixed(2)}/hr delta per node</strong>. This may be intentional for traffic spikes or latency SLOs. However, horizontal scaling on lower-tier GPUs is often more cost-effective: multiple ${tierName(modelTier)} nodes can match throughput while predictive autoscaling handles bursts — without paying for peak capacity 24/7. A full scan shows actual utilization so you can tell deliberate provisioning from genuine waste.`;
-
-      } else if (gpuTier < modelTier) {
-        // Under-tiered — throughput loss + OOM overhead
+      } else if (modelMem > gpuMem) {
+        // Under-tiered — model doesn't fit in GPU memory
         oom      = totalSpend * 0.15;
         misplace = totalSpend * 0.22;
-        signalMsg = `Your ${MODEL_LABELS[modelSize]} models require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). <strong>This is causing memory constraints, OOM kills, and severely limited batching.</strong> You're not just wasting money — your throughput is artificially capped.`;
+        signalMsg = `A ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB of VRAM, but ${GPU_LABELS[gpuType]} only has ${gpuMem}GB. <strong>This model does not fit — expect OOM kills, failed requests, and severely limited or zero batching.</strong> Minimum GPU needed: ${getMinFitGpu(modelMem) ? getMinFitGpu(modelMem).label : 'multi-GPU setup'}.`;
 
       } else {
-        // Correctly tiered — no confirmed misplacement
-        signalMsg = `Your primary model/GPU pairing looks correctly tiered — ${MODEL_LABELS[modelSize]} on ${GPU_LABELS[gpuType]} is a reasonable match. <strong>This does not mean your fleet is waste-free.</strong> Mixed workloads, configuration drift, idle replicas, and other model/GPU combinations in your fleet can still carry significant waste. A full scan gives you the complete picture across every workload.`;
+        // Model fits — check if a cheaper GPU would also fit
+        const minGpu = getMinFitGpu(modelMem);
+        const minCost = minGpu ? GPU_COSTS[minGpu.key] : gpuCost;
+
+        if (minGpu && minCost < gpuCost * 0.92) {
+          // Over-provisioned — cheaper GPU would suffice
+          const delta = gpuCost - minCost;
+          over = gpuCount * delta * hours;
+          signalMsg = `A ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB of VRAM — it fits on a <strong>${minGpu.label} at $${minCost.toFixed(2)}/hr</strong>, but you're running it on ${GPU_LABELS[gpuType]} at $${gpuCost.toFixed(2)}/hr. That's a <strong>$${delta.toFixed(2)}/hr delta per node.</strong> This may be intentional for traffic spikes or latency SLOs — horizontal scaling on lower-tier GPUs with predictive autoscaling is often more cost-effective than permanent vertical over-provisioning. A full scan shows actual utilization so you can confirm whether the headroom is being used.`;
+
+        } else {
+          // Correctly provisioned
+          signalMsg = `Your ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB — ${GPU_LABELS[gpuType]} (${gpuMem}GB) is a <strong>correct fit</strong> for this workload. This does not mean your fleet is waste-free. Other model/GPU combinations, idle replicas, and configuration drift across your full fleet can still carry significant waste. A full scan gives you the complete picture.`;
+        }
       }
 
       // Apply workload multiplier
@@ -440,14 +492,15 @@
       oom      *= wMult;
       over     *= wMult;
 
-      const totalLow  = Math.round((misplace + oom + over) * 0.75);
-      const totalHigh = Math.round((misplace + oom + over) * 1.30);
+      const total = misplace + oom + over;
+      const totalLow  = Math.round(total * 0.75);
+      const totalHigh = Math.round(total * 1.30);
 
-      // Render
-      if (gpuTier === modelTier) {
+      // ── Render ──────────────────────────────────────────────
+      if (total === 0) {
         document.getElementById('wasteRange').textContent = 'Run a Full Scan';
         document.getElementById('wasteSub').textContent   =
-          `primary pairing looks correctly tiered — scan your full fleet for hidden waste`;
+          `primary pairing is correctly provisioned — scan your full fleet for hidden waste`;
       } else {
         document.getElementById('wasteRange').textContent = `${fmt(totalLow)} — ${fmt(totalHigh)}`;
         document.getElementById('wasteSub').textContent   =
@@ -457,16 +510,11 @@
       document.getElementById('bdMisplacement').textContent = misplace > 0 ? fmt(Math.round(misplace)) : '—';
       document.getElementById('bdOom').textContent          = oom      > 0 ? fmt(Math.round(oom))      : '—';
       document.getElementById('bdOver').textContent         = over     > 0 ? fmt(Math.round(over))     : '—';
-
-      document.getElementById('signalBox').innerHTML = signalMsg;
+      document.getElementById('signalBox').innerHTML        = signalMsg;
 
       const results = document.getElementById('results');
       results.classList.add('visible');
       results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    function tierName(tier) {
-      return { 2:'T4', 3:'L4', 4:'A10', 5:'A100', 6:'H100' }[tier] || 'unknown';
     }
   </script>
 
