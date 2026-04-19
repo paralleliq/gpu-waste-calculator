@@ -417,40 +417,45 @@
       let signalMsg = '';
 
       if (gpuTier > modelTier) {
-        // Over-provisioned
+        // Over-provisioned — full cost delta is the waste
         const minCost = TIER_MIN_COST[modelTier];
-        over     = gpuCount * 0.40 * (gpuCost - minCost) * hours;
-        misplace = totalSpend * 0.05;
-        signalMsg = `Your ${MODEL_LABELS[modelSize]} models only require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). This may be intentional — larger GPUs provide headroom for traffic spikes or strict latency SLOs. <strong>However, horizontal scaling on lower-tier GPUs is often more cost-effective:</strong> multiple ${tierName(modelTier)} nodes at lower cost can match or exceed the throughput of a single ${GPU_LABELS[gpuType]}, while predictive autoscaling handles bursts without paying for peak capacity 24/7. A full scan shows actual utilization patterns so you can evaluate whether vertical over-provisioning or horizontal scaling better fits your workload.`;
+        const costDeltaPerNode = gpuCost - minCost;
+        over     = gpuCount * costDeltaPerNode * hours;
+        signalMsg = `Your ${MODEL_LABELS[modelSize]} models only require a tier-${modelTier} GPU (${tierName(modelTier)}) at ~$${minCost.toFixed(2)}/hr, but you're running them on ${GPU_LABELS[gpuType]} at $${gpuCost.toFixed(2)}/hr — a <strong>$${costDeltaPerNode.toFixed(2)}/hr delta per node</strong>. This may be intentional for traffic spikes or latency SLOs. However, horizontal scaling on lower-tier GPUs is often more cost-effective: multiple ${tierName(modelTier)} nodes can match throughput while predictive autoscaling handles bursts — without paying for peak capacity 24/7. A full scan shows actual utilization so you can tell deliberate provisioning from genuine waste.`;
+
       } else if (gpuTier < modelTier) {
-        // Under-tiered
+        // Under-tiered — throughput loss + OOM overhead
         oom      = totalSpend * 0.15;
         misplace = totalSpend * 0.22;
         signalMsg = `Your ${MODEL_LABELS[modelSize]} models require a tier-${modelTier} GPU (${tierName(modelTier)}), but you're running them on ${GPU_LABELS[gpuType]} (tier ${gpuTier}). <strong>This is causing memory constraints, OOM kills, and severely limited batching.</strong> You're not just wasting money — your throughput is artificially capped.`;
+
       } else {
-        // Correctly tiered — fleet variance
-        misplace = totalSpend * 0.08;
-        oom      = totalSpend * 0.04;
-        signalMsg = `Your primary model/GPU pairing looks correctly tiered. However, <strong>mixed fleets typically carry 8–15% waste from configuration drift, over-replicated workloads, and idle capacity.</strong> A full scan often surfaces more than the primary pairing suggests.`;
+        // Correctly tiered — no confirmed misplacement
+        signalMsg = `Your primary model/GPU pairing looks correctly tiered — ${MODEL_LABELS[modelSize]} on ${GPU_LABELS[gpuType]} is a reasonable match. <strong>This does not mean your fleet is waste-free.</strong> Mixed workloads, configuration drift, idle replicas, and other model/GPU combinations in your fleet can still carry significant waste. A full scan gives you the complete picture across every workload.`;
       }
 
-      // Apply workload multiplier and fleet variance
-      const variance = totalSpend * 0.04;
+      // Apply workload multiplier
       misplace *= wMult;
       oom      *= wMult;
       over     *= wMult;
 
-      const totalLow  = Math.round((misplace + oom + over + variance) * 0.75);
-      const totalHigh = Math.round((misplace + oom + over + variance) * 1.30);
+      const totalLow  = Math.round((misplace + oom + over) * 0.75);
+      const totalHigh = Math.round((misplace + oom + over) * 1.30);
 
       // Render
-      document.getElementById('wasteRange').textContent = `${fmt(totalLow)} — ${fmt(totalHigh)}`;
-      document.getElementById('wasteSub').textContent   =
-        `estimated annual waste across ${gpuCount} ${GPU_LABELS[gpuType]} node${gpuCount>1?'s':''}`;
+      if (gpuTier === modelTier) {
+        document.getElementById('wasteRange').textContent = 'Run a Full Scan';
+        document.getElementById('wasteSub').textContent   =
+          `primary pairing looks correctly tiered — scan your full fleet for hidden waste`;
+      } else {
+        document.getElementById('wasteRange').textContent = `${fmt(totalLow)} — ${fmt(totalHigh)}`;
+        document.getElementById('wasteSub').textContent   =
+          `estimated annual waste across ${gpuCount} ${GPU_LABELS[gpuType]} node${gpuCount>1?'s':''}`;
+      }
 
-      document.getElementById('bdMisplacement').textContent = fmt(Math.round(misplace));
-      document.getElementById('bdOom').textContent          = fmt(Math.round(oom));
-      document.getElementById('bdOver').textContent         = fmt(Math.round(over));
+      document.getElementById('bdMisplacement').textContent = misplace > 0 ? fmt(Math.round(misplace)) : '—';
+      document.getElementById('bdOom').textContent          = oom      > 0 ? fmt(Math.round(oom))      : '—';
+      document.getElementById('bdOver').textContent         = over     > 0 ? fmt(Math.round(over))     : '—';
 
       document.getElementById('signalBox').innerHTML = signalMsg;
 
