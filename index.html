@@ -723,10 +723,11 @@
       'highend': { key: 'h100',    mem: 80, label: 'H100 (80GB)' },
     };
     const CFO_USE_CASES = {
-      'small':    { modelSize: '13b', label: 'Small models (7B–13B)', training: false },
-      'large':    { modelSize: '70b', label: 'Large models (70B+)',   training: false },
-      'training': { modelSize: '70b', label: 'Training workloads',    training: true  },
-      'mixed':    { modelSize: '13b', label: 'Mixed workloads',       training: false },
+      // quant reflects typical production deployment, not worst case
+      'small':    { modelSize: '13b', quant: 'int8', label: 'Small models (7B–13B)', training: false },
+      'large':    { modelSize: '70b', quant: 'fp16', label: 'Large models (70B+)',   training: false },
+      'training': { modelSize: '70b', quant: 'fp16', label: 'Training workloads',    training: true  },
+      'mixed':    { modelSize: '13b', quant: 'int8', label: 'Mixed workloads',       training: false },
     };
 
     function calculateCfo() {
@@ -745,7 +746,7 @@
       const useCfg      = CFO_USE_CASES[useCase];
       const gpuCost     = PROVIDER_COSTS[provider][gpuSpec.key];
       const gpuMem      = gpuSpec.mem;
-      const modelMem    = MODEL_MEMORY[useCfg.modelSize]['fp16'];
+      const modelMem    = MODEL_MEMORY[useCfg.modelSize][useCfg.quant];
       // Derive implied node count from monthly spend and GPU hourly rate
       const impliedNodes = Math.max(1, Math.round(monthly / (gpuCost * 730)));
 
