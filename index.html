@@ -141,13 +141,39 @@
     button:hover { opacity: 0.92; }
     button:active { transform: scale(0.99); }
 
-    /* ── Results ─────────────────────────────────────────── */
-    #results {
-      display: none;
-      margin-top: 32px;
+    /* ── Mode tabs ───────────────────────────────────────── */
+    .mode-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 28px;
     }
 
-    #results.visible { display: block; }
+    .tab {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      background: var(--card2);
+      color: var(--muted);
+      border: 1.5px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      background: linear-gradient(90deg, var(--purple), var(--blue));
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .tab:hover:not(.active) { border-color: var(--blue); color: var(--text); }
+
+    /* ── Results ─────────────────────────────────────────── */
+    #results {
+      margin-top: 32px;
+    }
 
     .divider {
       border: none;
@@ -281,136 +307,207 @@
 
   <div class="card">
 
-    <div class="form-grid">
-
-      <div class="field full">
-        <label>Cloud Provider</label>
-        <div class="select-wrap">
-          <select id="cloudProvider" onchange="updateGpuPrices()">
-            <option value="gcp" selected>Google Cloud (GCP)</option>
-            <option value="aws">Amazon Web Services (AWS)</option>
-            <option value="azure">Microsoft Azure</option>
-            <option value="coreweave">CoreWeave</option>
-            <option value="lambda">Lambda Labs</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field full">
-        <label>Number of GPU Nodes</label>
-        <input type="number" id="gpuCount" value="20" min="1" max="10000" />
-      </div>
-
-      <div class="field">
-        <label>Primary GPU Type</label>
-        <div class="select-wrap">
-          <select id="gpuType">
-            <option value="t4">NVIDIA T4</option>
-            <option value="l4" selected>NVIDIA L4</option>
-            <option value="a10">NVIDIA A10 (48GB)</option>
-            <option value="a100-40">NVIDIA A100 40GB</option>
-            <option value="a100-80">NVIDIA A100 80GB</option>
-            <option value="h100">NVIDIA H100</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Primary Model Size</label>
-        <div class="select-wrap">
-          <select id="modelSize">
-            <option value="7b">7B – 8B</option>
-            <option value="13b">13B</option>
-            <option value="22b">22B</option>
-            <option value="30b">30B – 40B</option>
-            <option value="70b" selected>70B – 72B</option>
-            <option value="180b">180B+</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Quantization</label>
-        <div class="select-wrap">
-          <select id="quantization">
-            <option value="fp16">fp16 / bf16 (full precision)</option>
-            <option value="int8">int8 (8-bit)</option>
-            <option value="int4">int4 (4-bit GPTQ/AWQ)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field full">
-        <label>Primary Workload Type</label>
-        <div class="select-wrap">
-          <select id="workloadType">
-            <option value="inference" selected>Inference</option>
-            <option value="training">Training</option>
-            <option value="mixed">Mixed</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Max Sequence Length</label>
-        <div class="select-wrap">
-          <select id="seqLen">
-            <option value="512">512 tokens</option>
-            <option value="1024">1K tokens</option>
-            <option value="2048" selected>2K tokens</option>
-            <option value="4096">4K tokens</option>
-            <option value="8192">8K tokens</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Peak Concurrent Batch</label>
-        <input type="number" id="batchSize" value="8" min="1" max="256" />
-      </div>
-
+    <!-- ── Mode tabs ── -->
+    <div class="mode-tabs">
+      <button class="tab active" id="tabCfo"  onclick="setMode('cfo')">Quick Estimate</button>
+      <button class="tab"        id="tabTech" onclick="setMode('tech')">Technical</button>
     </div>
 
-    <button onclick="calculate()">Calculate My GPU Waste</button>
+    <!-- ── Quick Estimate (CFO) form ── -->
+    <div id="cfoForm">
+      <div class="form-grid">
 
+        <div class="field full">
+          <label>Monthly GPU Spend</label>
+          <input type="number" id="monthlySpend" placeholder="e.g. 50000" min="1" />
+        </div>
+
+        <div class="field">
+          <label>Cloud Provider</label>
+          <div class="select-wrap">
+            <select id="cfoProvider">
+              <option value="gcp" selected>Google Cloud (GCP)</option>
+              <option value="aws">Amazon Web Services (AWS)</option>
+              <option value="azure">Microsoft Azure</option>
+              <option value="coreweave">CoreWeave</option>
+              <option value="lambda">Lambda Labs</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Primary Use Case</label>
+          <div class="select-wrap">
+            <select id="useCase">
+              <option value="inference" selected>LLM / AI Inference</option>
+              <option value="training">Model Training</option>
+              <option value="mixed">Mixed Workloads</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+      <button onclick="calculateCfo()">Estimate My GPU Waste</button>
+    </div>
+
+    <!-- ── Technical form ── -->
+    <div id="techForm" style="display:none">
+      <div class="form-grid">
+
+        <div class="field full">
+          <label>Cloud Provider</label>
+          <div class="select-wrap">
+            <select id="cloudProvider" onchange="updateGpuPrices()">
+              <option value="gcp" selected>Google Cloud (GCP)</option>
+              <option value="aws">Amazon Web Services (AWS)</option>
+              <option value="azure">Microsoft Azure</option>
+              <option value="coreweave">CoreWeave</option>
+              <option value="lambda">Lambda Labs</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field full">
+          <label>Number of GPU Nodes</label>
+          <input type="number" id="gpuCount" value="20" min="1" max="10000" />
+        </div>
+
+        <div class="field">
+          <label>Primary GPU Type</label>
+          <div class="select-wrap">
+            <select id="gpuType">
+              <option value="t4">NVIDIA T4</option>
+              <option value="l4" selected>NVIDIA L4</option>
+              <option value="a10">NVIDIA A10 (48GB)</option>
+              <option value="a100-40">NVIDIA A100 40GB</option>
+              <option value="a100-80">NVIDIA A100 80GB</option>
+              <option value="h100">NVIDIA H100</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Primary Model Size</label>
+          <div class="select-wrap">
+            <select id="modelSize">
+              <option value="7b">7B – 8B</option>
+              <option value="13b">13B</option>
+              <option value="22b">22B</option>
+              <option value="30b">30B – 40B</option>
+              <option value="70b" selected>70B – 72B</option>
+              <option value="180b">180B+</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Quantization</label>
+          <div class="select-wrap">
+            <select id="quantization">
+              <option value="fp16">fp16 / bf16 (full precision)</option>
+              <option value="int8">int8 (8-bit)</option>
+              <option value="int4">int4 (4-bit GPTQ/AWQ)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field full">
+          <label>Primary Workload Type</label>
+          <div class="select-wrap">
+            <select id="workloadType">
+              <option value="inference" selected>Inference</option>
+              <option value="training">Training</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Max Sequence Length</label>
+          <div class="select-wrap">
+            <select id="seqLen">
+              <option value="512">512 tokens</option>
+              <option value="1024">1K tokens</option>
+              <option value="2048" selected>2K tokens</option>
+              <option value="4096">4K tokens</option>
+              <option value="8192">8K tokens</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Peak Concurrent Batch</label>
+          <input type="number" id="batchSize" value="8" min="1" max="256" />
+        </div>
+
+      </div>
+      <button onclick="calculate()">Calculate My GPU Waste</button>
+    </div>
+
+    <!-- ── Results ── -->
     <div id="results">
-      <hr class="divider" />
 
-      <div class="results-label">Estimated Annual GPU Waste</div>
-      <div class="waste-amount" id="wasteRange">—</div>
-      <div class="waste-sub" id="wasteSub">per year across your fleet</div>
-
-      <div class="breakdown">
-        <div class="breakdown-item">
-          <div class="bi-value" id="bdMisplacement">—</div>
-          <div class="bi-label">Tier Misplacement</div>
+      <!-- CFO results -->
+      <div id="cfoResults" style="display:none">
+        <hr class="divider" />
+        <div class="results-label">Estimated Annual GPU Waste</div>
+        <div class="waste-amount" id="cfoWasteRange">—</div>
+        <div class="waste-sub" id="cfoWasteSub">per year</div>
+        <div class="breakdown" style="grid-template-columns:1fr 1fr">
+          <div class="breakdown-item">
+            <div class="bi-value" id="cfoPct">—</div>
+            <div class="bi-label">of GPU budget wasted</div>
+          </div>
+          <div class="breakdown-item">
+            <div class="bi-value" id="cfoNodes">—</div>
+            <div class="bi-label">equivalent idle nodes</div>
+          </div>
         </div>
-        <div class="breakdown-item">
-          <div class="bi-value" id="bdOom">—</div>
-          <div class="bi-label">OOM Risk Overhead</div>
-        </div>
-        <div class="breakdown-item">
-          <div class="bi-value" id="bdOver">—</div>
-          <div class="bi-label">Over-Provisioning</div>
-        </div>
-        <div class="breakdown-item" id="bdKvItem">
-          <div class="bi-value" id="bdKv">—</div>
-          <div class="bi-label">KV Cache Headroom</div>
+        <div class="signal-box" id="cfoSignal"></div>
+        <button onclick="window.location.href='https://github.com/paralleliq/piqc'">
+          Get Your Exact Number — Run a Free Scan
+        </button>
+        <div class="cta-section">
+          <p>piqc scans your Kubernetes cluster in seconds. No agents, no instrumentation, nothing changes in your cluster.<br/>
+          <a href="mailto:info@paralleliq.ai">Questions? info@paralleliq.ai</a></p>
         </div>
       </div>
 
-      <div class="signal-box" id="signalBox"></div>
-
-      <div class="caveat" id="kvCaveat"></div>
-
-      <button onclick="window.location.href='https://github.com/paralleliq/piqc'">
-        Get Your Exact Number — Run a Free Scan
-      </button>
-
-      <div class="cta-section">
-        <p>piqc scans your Kubernetes cluster in seconds. No agents, no instrumentation, nothing changes in your cluster.<br/>
-        <a href="mailto:info@paralleliq.ai">Questions? info@paralleliq.ai</a></p>
+      <!-- Technical results -->
+      <div id="techResults" style="display:none">
+        <hr class="divider" />
+        <div class="results-label">Estimated Annual GPU Waste</div>
+        <div class="waste-amount" id="wasteRange">—</div>
+        <div class="waste-sub" id="wasteSub">per year across your fleet</div>
+        <div class="breakdown">
+          <div class="breakdown-item">
+            <div class="bi-value" id="bdMisplacement">—</div>
+            <div class="bi-label">Tier Misplacement</div>
+          </div>
+          <div class="breakdown-item">
+            <div class="bi-value" id="bdOom">—</div>
+            <div class="bi-label">OOM Risk Overhead</div>
+          </div>
+          <div class="breakdown-item">
+            <div class="bi-value" id="bdOver">—</div>
+            <div class="bi-label">Over-Provisioning</div>
+          </div>
+          <div class="breakdown-item" id="bdKvItem">
+            <div class="bi-value" id="bdKv">—</div>
+            <div class="bi-label">KV Cache Headroom</div>
+          </div>
+        </div>
+        <div class="signal-box" id="signalBox"></div>
+        <div class="caveat" id="kvCaveat"></div>
+        <button onclick="window.location.href='https://github.com/paralleliq/piqc'">
+          Get Your Exact Number — Run a Free Scan
+        </button>
+        <div class="cta-section">
+          <p>piqc scans your Kubernetes cluster in seconds. No agents, no instrumentation, nothing changes in your cluster.<br/>
+          <a href="mailto:info@paralleliq.ai">Questions? info@paralleliq.ai</a></p>
+        </div>
       </div>
+
     </div>
 
   </div>
@@ -601,9 +698,75 @@
       document.getElementById('bdOver').textContent         = over     > 0 ? fmt(Math.round(over))     : '—';
       document.getElementById('signalBox').innerHTML        = signalMsg;
 
-      const results = document.getElementById('results');
-      results.classList.add('visible');
-      results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('techResults').style.display = 'block';
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ── CFO / Quick Estimate calculation ────────────────────
+    function calculateCfo() {
+      const monthly  = parseFloat(document.getElementById('monthlySpend').value);
+      const provider = document.getElementById('cfoProvider').value;
+      const useCase  = document.getElementById('useCase').value;
+
+      if (!monthly || monthly <= 0) {
+        document.getElementById('monthlySpend').focus();
+        return;
+      }
+
+      const annual = monthly * 12;
+
+      // Industry-observed waste ranges by workload type
+      const WASTE = {
+        'inference': { low: 0.20, high: 0.35 },
+        'training':  { low: 0.12, high: 0.22 },
+        'mixed':     { low: 0.18, high: 0.30 },
+      };
+      const USE_LABELS = {
+        'inference': 'LLM inference',
+        'training':  'model training',
+        'mixed':     'mixed workloads',
+      };
+
+      const w         = WASTE[useCase];
+      const wasteLow  = annual * w.low;
+      const wasteHigh = annual * w.high;
+      const wasteMid  = (wasteLow + wasteHigh) / 2;
+
+      // Equivalent idle nodes — use A100 40GB as reference inference GPU for the provider
+      const refHourly = PROVIDER_COSTS[provider]['a100-40'];
+      const idleNodes = Math.max(1, Math.round(wasteMid / (refHourly * 8760)));
+
+      const pctLow  = Math.round(w.low  * 100);
+      const pctHigh = Math.round(w.high * 100);
+
+      const monthlyFmt = monthly >= 1000
+        ? `$${(monthly/1000).toFixed(0)}k/mo`
+        : `$${Math.round(monthly)}/mo`;
+
+      document.getElementById('cfoWasteRange').textContent =
+        `${fmt(Math.round(wasteLow))} — ${fmt(Math.round(wasteHigh))}`;
+      document.getElementById('cfoWasteSub').textContent =
+        `estimated waste per year on ${monthlyFmt} GPU spend`;
+      document.getElementById('cfoPct').textContent    = `${pctLow}–${pctHigh}%`;
+      document.getElementById('cfoNodes').textContent  = `~${idleNodes}`;
+      document.getElementById('cfoSignal').innerHTML   =
+        `Fleets running ${USE_LABELS[useCase]} typically carry ${pctLow}–${pctHigh}% waste from tier misplacement, over-provisioning, and memory pressure events. ` +
+        `That's the equivalent of <strong>~${idleNodes} GPU nodes running idle around the clock.</strong> ` +
+        `A free piqc scan identifies exactly which workloads are contributing — no agents or instrumentation required.`;
+
+      document.getElementById('cfoResults').style.display = 'block';
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ── Mode toggle ──────────────────────────────────────────
+    function setMode(mode) {
+      document.getElementById('cfoForm').style.display  = mode === 'cfo'  ? 'block' : 'none';
+      document.getElementById('techForm').style.display = mode === 'tech' ? 'block' : 'none';
+      // Hide results when switching so user recalculates in new mode
+      document.getElementById('cfoResults').style.display  = 'none';
+      document.getElementById('techResults').style.display = 'none';
+      document.getElementById('tabCfo').classList.toggle('active',  mode === 'cfo');
+      document.getElementById('tabTech').classList.toggle('active', mode === 'tech');
     }
   </script>
 
