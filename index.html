@@ -390,6 +390,7 @@
               <option value="entry">Entry — T4 / L4</option>
               <option value="mid">Mid — A10 / A100 40GB</option>
               <option value="highend">High-end — A100 80GB / H100</option>
+              <option value="mi300x">AMD MI300X (192GB)</option>
             </select>
           </div>
         </div>
@@ -442,6 +443,7 @@
               <option value="a100-40">NVIDIA A100 40GB</option>
               <option value="a100-80">NVIDIA A100 80GB</option>
               <option value="h100">NVIDIA H100</option>
+              <option value="mi300x">AMD MI300X (192GB)</option>
             </select>
           </div>
         </div>
@@ -585,11 +587,12 @@
   <script>
     // ── Provider pricing ────────────────────────────────────
     const PROVIDER_COSTS = {
-      'gcp':       { 't4':0.35, 'l4':0.54, 'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50 },
-      'aws':       { 't4':0.53, 'l4':0.81, 'a10':1.01, 'a100-40':3.21, 'a100-80':4.10, 'h100':5.12 },
-      'azure':     { 't4':0.52, 'l4':0.78, 'a10':1.17, 'a100-40':3.06, 'a100-80':3.67, 'h100':4.77 },
-      'coreweave': { 't4':0.28, 'l4':0.43, 'a10':0.85, 'a100-40':2.06, 'a100-80':2.76, 'h100':2.95 },
-      'lambda':    { 't4':0.26, 'l4':0.40, 'a10':0.76, 'a100-40':1.99, 'a100-80':2.49, 'h100':2.49 },
+      // mi300x: Azure ND MI300X v5 | CoreWeave/Lambda public pricing | market est. for GCP/AWS (not yet offered)
+      'gcp':       { 't4':0.35, 'l4':0.54, 'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50, 'mi300x':3.80 },
+      'aws':       { 't4':0.53, 'l4':0.81, 'a10':1.01, 'a100-40':3.21, 'a100-80':4.10, 'h100':5.12, 'mi300x':4.00 },
+      'azure':     { 't4':0.52, 'l4':0.78, 'a10':1.17, 'a100-40':3.06, 'a100-80':3.67, 'h100':4.77, 'mi300x':4.50 },
+      'coreweave': { 't4':0.28, 'l4':0.43, 'a10':0.85, 'a100-40':2.06, 'a100-80':2.76, 'h100':2.95, 'mi300x':3.20 },
+      'lambda':    { 't4':0.26, 'l4':0.40, 'a10':0.76, 'a100-40':1.99, 'a100-80':2.49, 'h100':2.49, 'mi300x':3.49 },
     };
 
     let GPU_COSTS = { ...PROVIDER_COSTS['gcp'] };
@@ -607,9 +610,10 @@
       { key:'a100-40', mem:40,  label:'A100 40GB'      },
       { key:'a100-80', mem:80,  label:'A100 80GB'      },
       { key:'h100',    mem:80,  label:'H100 (80GB)'    },
+      { key:'mi300x',  mem:192, label:'MI300X (192GB)' },
     ];
 
-    const GPU_LABELS = { 't4':'T4','l4':'L4','a10':'A10','a100-40':'A100 40GB','a100-80':'A100 80GB','h100':'H100' };
+    const GPU_LABELS = { 't4':'T4','l4':'L4','a10':'A10','a100-40':'A100 40GB','a100-80':'A100 80GB','h100':'H100','mi300x':'MI300X' };
 
     // ── Model VRAM requirements by quantization (GB) ─────────
     const MODEL_MEMORY = {
@@ -772,9 +776,10 @@
     // Maps simplified tier and use-case selectors to real GPU specs and model
     // sizes, then runs the same memory-based fit logic as the technical mode.
     const CFO_GPU_MAP = {
-      'entry':   { key: 'l4',      mem: 24, label: 'L4 (24GB)'   },
-      'mid':     { key: 'a100-40', mem: 40, label: 'A100 40GB'   },
-      'highend': { key: 'h100',    mem: 80, label: 'H100 (80GB)' },
+      'entry':   { key: 'l4',      mem: 24,  label: 'L4 (24GB)'    },
+      'mid':     { key: 'a100-40', mem: 40,  label: 'A100 40GB'    },
+      'highend': { key: 'h100',    mem: 80,  label: 'H100 (80GB)'  },
+      'mi300x':  { key: 'mi300x',  mem: 192, label: 'MI300X (192GB)' },
     };
     const CFO_USE_CASES = {
       // quant reflects typical production deployment, not worst case
