@@ -321,6 +321,86 @@
 
     .signal-box strong { color: var(--cyan); }
 
+    /* ── Share button ────────────────────────────────────── */
+    .share-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .share-btn {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--muted);
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 10px 16px;
+      border-radius: 8px;
+      width: auto;
+      transition: all 0.2s;
+    }
+
+    .share-btn:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .share-btn.copied {
+      border-color: #4ade80;
+      color: #4ade80;
+    }
+
+    /* ── Lead capture ────────────────────────────────────── */
+    .lead-section {
+      background: linear-gradient(135deg, rgba(74,108,247,0.10), rgba(0,196,196,0.06));
+      border: 1px solid rgba(74,108,247,0.3);
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 20px;
+    }
+
+    .lead-section p {
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .lead-section p strong { color: var(--text); }
+
+    .lead-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .lead-input-row input {
+      padding: 10px 14px;
+      flex: 1;
+      font-size: 0.9rem;
+    }
+
+    .lead-submit-btn {
+      width: auto;
+      padding: 10px 18px;
+      font-size: 0.88rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .lead-success {
+      font-size: 0.88rem;
+      color: #4ade80;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .lead-error {
+      font-size: 0.88rem;
+      color: #f87171;
+      margin-top: 10px;
+      display: none;
+    }
+
     /* ── CTA ─────────────────────────────────────────────── */
     .cta-section {
       margin-top: 40px;
@@ -353,6 +433,9 @@
       .breakdown { grid-template-columns: 1fr; }
       .card { padding: 24px 20px; }
       .waste-amount { font-size: 2rem; }
+      .lead-input-row { flex-direction: column; }
+      .lead-submit-btn { width: 100%; }
+      .share-btn { width: 100%; }
     }
   </style>
 </head>
@@ -401,6 +484,7 @@
               <option value="entry">Entry — T4 / L4</option>
               <option value="mid">Mid — A10 / A100 40GB</option>
               <option value="highend">High-end — A100 80GB / H100</option>
+              <option value="h200">Latest — H200 (141GB)</option>
               <option value="mi300x">AMD MI300X (192GB)</option>
             </select>
           </div>
@@ -454,6 +538,7 @@
               <option value="a100-40">NVIDIA A100 40GB</option>
               <option value="a100-80">NVIDIA A100 80GB</option>
               <option value="h100">NVIDIA H100</option>
+              <option value="h200">NVIDIA H200 (141GB)</option>
               <option value="mi300x">AMD MI300X (192GB)</option>
             </select>
           </div>
@@ -543,6 +628,23 @@
           </div>
         </div>
         <div class="signal-box" id="cfoSignal"></div>
+
+        <!-- Share -->
+        <div class="share-row">
+          <button class="share-btn" id="shareBtnCfo" onclick="copyShareLink('cfo')">🔗 Copy shareable link</button>
+        </div>
+
+        <!-- Lead capture -->
+        <div class="lead-section">
+          <p><strong>Want this report in your inbox?</strong><br/>Enter your email and we'll send your full efficiency analysis plus tips for reducing GPU waste.</p>
+          <div class="lead-input-row">
+            <input type="email" id="leadEmailCfo" placeholder="you@company.com" />
+            <button class="lead-submit-btn" onclick="submitLead('cfo')">Send Report</button>
+          </div>
+          <div class="lead-success" id="leadSuccessCfo">✓ Sent! Check your inbox.</div>
+          <div class="lead-error" id="leadErrorCfo">Something went wrong — email us at info@paralleliq.ai</div>
+        </div>
+
         <button onclick="window.location.href='https://github.com/paralleliq/piqc'">
           Get Your Exact Number — Run a Free Scan
         </button>
@@ -578,6 +680,23 @@
         </div>
         <div class="signal-box" id="signalBox"></div>
         <div class="caveat" id="kvCaveat"></div>
+
+        <!-- Share -->
+        <div class="share-row">
+          <button class="share-btn" id="shareBtnTech" onclick="copyShareLink('tech')">🔗 Copy shareable link</button>
+        </div>
+
+        <!-- Lead capture -->
+        <div class="lead-section">
+          <p><strong>Want this report in your inbox?</strong><br/>Enter your email and we'll send your full efficiency analysis plus tips for reducing GPU waste.</p>
+          <div class="lead-input-row">
+            <input type="email" id="leadEmailTech" placeholder="you@company.com" />
+            <button class="lead-submit-btn" onclick="submitLead('tech')">Send Report</button>
+          </div>
+          <div class="lead-success" id="leadSuccessTech">✓ Sent! Check your inbox.</div>
+          <div class="lead-error" id="leadErrorTech">Something went wrong — email us at info@paralleliq.ai</div>
+        </div>
+
         <button onclick="window.location.href='https://github.com/paralleliq/piqc'">
           Get Your Exact Number — Run a Free Scan
         </button>
@@ -596,14 +715,15 @@
   </footer>
 
   <script>
+    const FORMSPREE_URL = 'https://formspree.io/f/xyklnbgy';
+
     // ── Provider pricing ────────────────────────────────────
     const PROVIDER_COSTS = {
-      // mi300x: Azure ND MI300X v5 | CoreWeave/Lambda public pricing | market est. for GCP/AWS (not yet offered)
-      'gcp':       { 't4':0.35, 'l4':0.54, 'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50, 'mi300x':3.80 },
-      'aws':       { 't4':0.53, 'l4':0.81, 'a10':1.01, 'a100-40':3.21, 'a100-80':4.10, 'h100':5.12, 'mi300x':4.00 },
-      'azure':     { 't4':0.52, 'l4':0.78, 'a10':1.17, 'a100-40':3.06, 'a100-80':3.67, 'h100':4.77, 'mi300x':4.50 },
-      'coreweave': { 't4':0.28, 'l4':0.43, 'a10':0.85, 'a100-40':2.06, 'a100-80':2.76, 'h100':2.95, 'mi300x':3.20 },
-      'lambda':    { 't4':0.26, 'l4':0.40, 'a10':0.76, 'a100-40':1.99, 'a100-80':2.49, 'h100':2.49, 'mi300x':3.49 },
+      'gcp':       { 't4':0.35, 'l4':0.54, 'a10':0.90, 'a100-40':2.21, 'a100-80':3.06, 'h100':3.50, 'h200':5.20, 'mi300x':3.80 },
+      'aws':       { 't4':0.53, 'l4':0.81, 'a10':1.01, 'a100-40':3.21, 'a100-80':4.10, 'h100':5.12, 'h200':6.50, 'mi300x':4.00 },
+      'azure':     { 't4':0.52, 'l4':0.78, 'a10':1.17, 'a100-40':3.06, 'a100-80':3.67, 'h100':4.77, 'h200':6.10, 'mi300x':4.50 },
+      'coreweave': { 't4':0.28, 'l4':0.43, 'a10':0.85, 'a100-40':2.06, 'a100-80':2.76, 'h100':2.95, 'h200':4.20, 'mi300x':3.20 },
+      'lambda':    { 't4':0.26, 'l4':0.40, 'a10':0.76, 'a100-40':1.99, 'a100-80':2.49, 'h100':2.49, 'h200':3.80, 'mi300x':3.49 },
     };
 
     let GPU_COSTS = { ...PROVIDER_COSTS['gcp'] };
@@ -613,20 +733,23 @@
     }
 
     // ── GPU specs ────────────────────────────────────────────
-    // Ordered cheapest → most expensive (used to find min-fit GPU)
     const GPU_SPECS = [
-      { key:'t4',      mem:16,  label:'T4 (16GB)'      },
-      { key:'l4',      mem:24,  label:'L4 (24GB)'      },
-      { key:'a10',     mem:24,  label:'A10 (24GB)'     },
-      { key:'a100-40', mem:40,  label:'A100 40GB'      },
-      { key:'a100-80', mem:80,  label:'A100 80GB'      },
-      { key:'h100',    mem:80,  label:'H100 (80GB)'    },
-      { key:'mi300x',  mem:192, label:'MI300X (192GB)' },
+      { key:'t4',      mem:16,  label:'T4 (16GB)'       },
+      { key:'l4',      mem:24,  label:'L4 (24GB)'       },
+      { key:'a10',     mem:24,  label:'A10 (24GB)'      },
+      { key:'a100-40', mem:40,  label:'A100 40GB'       },
+      { key:'a100-80', mem:80,  label:'A100 80GB'       },
+      { key:'h100',    mem:80,  label:'H100 (80GB)'     },
+      { key:'h200',    mem:141, label:'H200 (141GB)'    },
+      { key:'mi300x',  mem:192, label:'MI300X (192GB)'  },
     ];
 
-    const GPU_LABELS = { 't4':'T4','l4':'L4','a10':'A10','a100-40':'A100 40GB','a100-80':'A100 80GB','h100':'H100','mi300x':'MI300X' };
+    const GPU_LABELS = {
+      't4':'T4', 'l4':'L4', 'a10':'A10', 'a100-40':'A100 40GB',
+      'a100-80':'A100 80GB', 'h100':'H100', 'h200':'H200', 'mi300x':'MI300X'
+    };
 
-    // ── Model VRAM requirements by quantization (GB) ─────────
+    // ── Model VRAM requirements ──────────────────────────────
     const MODEL_MEMORY = {
       '7b':  { 'fp16':14,  'int8':7,   'int4':4  },
       '13b': { 'fp16':26,  'int8':13,  'int4':7  },
@@ -636,17 +759,18 @@
       '180b':{ 'fp16':360, 'int8':180, 'int4':90 },
     };
 
-    const MODEL_LABELS = { '7b':'7B–8B','13b':'13B','22b':'22B','30b':'30B–40B','70b':'70B–72B','180b':'180B+' };
-    const QUANT_LABELS = { 'fp16':'fp16/bf16','int8':'int8','int4':'int4' };
+    const MODEL_LABELS  = { '7b':'7B–8B','13b':'13B','22b':'22B','30b':'30B–40B','70b':'70B–72B','180b':'180B+' };
+    const QUANT_LABELS  = { 'fp16':'fp16/bf16','int8':'int8','int4':'int4' };
     const WORKLOAD_MULT = { 'inference':1.0, 'training':0.75, 'mixed':1.1 };
 
-    // ── KV cache per token (MB, fp16 regardless of weight quant) ──
-    // Derived from: 2 × layers × num_kv_heads × head_dim × 2 bytes
-    // Models: 7B=32L/32H/128D, 13B=40L/40H/128D, 22B=48L/48H/128D,
-    //         30B=60L/52H/128D, 70B=80L/64H/128D, 180B=96L/96H/128D
     const KV_PER_TOKEN_MB = {
-      '7b': 0.50, '13b': 0.82, '22b': 1.57, '30b': 2.02, '70b': 2.62, '180b': 6.29
+      '7b':0.50, '13b':0.82, '22b':1.57, '30b':2.02, '70b':2.62, '180b':6.29
     };
+
+    // Last results for lead capture
+    let lastCfoResult  = null;
+    let lastTechResult = null;
+    let currentMode    = 'cfo';
 
     // ── Helpers ──────────────────────────────────────────────
     function fmt(n) {
@@ -656,14 +780,13 @@
     }
 
     function getMinFitGpu(requiredMemGB) {
-      // Returns cheapest GPU spec whose memory >= required
       for (const spec of GPU_SPECS) {
         if (spec.mem >= requiredMemGB) return spec;
       }
-      return null; // requires multi-GPU
+      return null;
     }
 
-    // ── Main calculation ─────────────────────────────────────
+    // ── Technical calculation ────────────────────────────────
     function calculate() {
       const gpuCount  = Math.max(1, parseInt(document.getElementById('gpuCount').value) || 1);
       const gpuType   = document.getElementById('gpuType').value;
@@ -672,6 +795,7 @@
       const workload  = document.getElementById('workloadType').value;
       const seqLen    = parseInt(document.getElementById('seqLen').value);
       const batchSize = Math.max(1, parseInt(document.getElementById('batchSize').value) || 1);
+      const provider  = document.getElementById('cloudProvider').value;
 
       const gpuCost    = GPU_COSTS[gpuType];
       const gpuSpec    = GPU_SPECS.find(s => s.key === gpuType);
@@ -681,44 +805,34 @@
       const hours      = 8760;
       const totalSpend = gpuCount * gpuCost * hours;
 
-      // ── KV cache headroom ──────────────────────────────────
-      // KV cache is typically stored in fp16 regardless of weight quantization
       const kvCacheGB      = (KV_PER_TOKEN_MB[modelSize] * seqLen * batchSize) / 1024;
-      const weightHeadroom = Math.max(0, gpuMem - modelMem);   // GB free after weights
+      const weightHeadroom = Math.max(0, gpuMem - modelMem);
       const kvRatio        = weightHeadroom > 0 ? kvCacheGB / weightHeadroom : 999;
-      // kvRatio: <0.7 = ok, 0.7–1.0 = tight, >1.0 = will OOM under this load
 
       let misplace = 0, oom = 0, over = 0, signalMsg = '', kvExtra = '';
 
       if (modelMem > 80 && gpuMem <= 80) {
-        // Multi-GPU required — single GPU can never fit
         misplace = totalSpend * 0.30;
         oom      = totalSpend * 0.20;
         signalMsg = `A ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB of VRAM — <strong>no single GPU can fit this model.</strong> This workload requires tensor parallelism across multiple GPUs. If you're running it on a single ${GPU_LABELS[gpuType]}, it will crash with OOM errors. Estimated waste reflects the cost of failed and restarted inference jobs.`;
 
       } else if (modelMem > gpuMem) {
-        // Under-tiered — model doesn't fit in GPU memory
         oom      = totalSpend * 0.15;
         misplace = totalSpend * 0.22;
         signalMsg = `A ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB of VRAM, but ${GPU_LABELS[gpuType]} only has ${gpuMem}GB. <strong>This model does not fit — expect OOM kills, failed requests, and severely limited or zero batching.</strong> Minimum GPU needed: ${getMinFitGpu(modelMem) ? getMinFitGpu(modelMem).label : 'multi-GPU setup'}.`;
 
       } else {
-        // Model fits — check if a cheaper GPU would also fit
         const minGpu  = getMinFitGpu(modelMem);
         const minCost = minGpu ? GPU_COSTS[minGpu.key] : gpuCost;
 
         if (minGpu && minCost < gpuCost * 0.92) {
-          // Over-provisioned — cheaper GPU would suffice
           const delta = gpuCost - minCost;
           over = gpuCount * delta * hours;
           signalMsg = `A ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB of VRAM — it fits on a <strong>${minGpu.label} at $${minCost.toFixed(2)}/hr</strong>, but you're running it on ${GPU_LABELS[gpuType]} at $${gpuCost.toFixed(2)}/hr. That's a <strong>$${delta.toFixed(2)}/hr delta per node.</strong> This may be intentional for traffic spikes or latency SLOs — horizontal scaling on lower-tier GPUs with predictive autoscaling is often more cost-effective than permanent vertical over-provisioning. A full scan shows actual utilization so you can confirm whether the headroom is being used.`;
-
         } else {
-          // Correctly provisioned for weights
           signalMsg = `Your ${MODEL_LABELS[modelSize]} model at ${QUANT_LABELS[quant]} requires ~${modelMem}GB — ${GPU_LABELS[gpuType]} (${gpuMem}GB) is a <strong>correct fit</strong> for this workload. This does not mean your fleet is waste-free. Other model/GPU combinations, idle replicas, and configuration drift across your full fleet can still carry significant waste. A full scan gives you the complete picture.`;
         }
 
-        // KV cache OOM risk (only relevant when weights fit)
         if (kvRatio > 1.0) {
           oom += totalSpend * 0.12;
           kvExtra = ` <strong>KV cache alert:</strong> at batch=${batchSize} / seq=${seqLen} tokens, the KV cache alone needs ~${kvCacheGB.toFixed(1)}GB but only ${weightHeadroom.toFixed(1)}GB remains after weights — <strong>this will OOM under production load.</strong> Reduce batch size, sequence length, or move to a GPU with more VRAM headroom.`;
@@ -729,7 +843,6 @@
 
       if (kvExtra) signalMsg += '<br/><br/>' + kvExtra;
 
-      // Apply workload multiplier
       misplace *= wMult;
       oom      *= wMult;
       over     *= wMult;
@@ -738,11 +851,9 @@
       const totalLow  = Math.round(total * 0.75);
       const totalHigh = Math.round(total * 1.30);
 
-      // ── KV cache tile ────────────────────────────────────────
       const kvEl   = document.getElementById('bdKv');
       const kvItem = document.getElementById('bdKvItem');
       if (modelMem > gpuMem) {
-        // Model doesn't fit — KV cache is moot
         kvEl.textContent = 'N/A';
         kvItem.removeAttribute('data-state');
       } else if (kvRatio > 1.0) {
@@ -756,22 +867,17 @@
         kvItem.setAttribute('data-state', 'ok');
       }
 
-      // ── Caveat ───────────────────────────────────────────────
-      const kvGB_fmt = kvCacheGB.toFixed(1);
       document.getElementById('kvCaveat').innerHTML =
         `<em>Weight estimate only.</em> Total VRAM = weights + KV cache (seq × batch × layers × heads) + activations + runtime overhead. ` +
-        `At batch=${batchSize} / seq=${seqLen.toLocaleString()} tokens, KV cache ≈ ${kvGB_fmt}GB on top of ${modelMem}GB weights. ` +
+        `At batch=${batchSize} / seq=${seqLen.toLocaleString()} tokens, KV cache ≈ ${kvCacheGB.toFixed(1)}GB on top of ${modelMem}GB weights. ` +
         `Run a full scan to measure actual runtime headroom.`;
 
-      // ── Render ──────────────────────────────────────────────
       if (total === 0) {
         document.getElementById('wasteRange').textContent = 'Run a Full Scan';
-        document.getElementById('wasteSub').textContent   =
-          `primary pairing is correctly provisioned — scan your full fleet for hidden savings`;
+        document.getElementById('wasteSub').textContent   = `primary pairing is correctly provisioned — scan your full fleet for hidden savings`;
       } else {
         document.getElementById('wasteRange').textContent = `${fmt(totalLow)} — ${fmt(totalHigh)}`;
-        document.getElementById('wasteSub').textContent   =
-          `recoverable per year across ${gpuCount} ${GPU_LABELS[gpuType]} node${gpuCount>1?'s':''}`;
+        document.getElementById('wasteSub').textContent   = `recoverable per year across ${gpuCount} ${GPU_LABELS[gpuType]} node${gpuCount>1?'s':''}`;
       }
 
       document.getElementById('bdMisplacement').textContent = misplace > 0 ? fmt(Math.round(misplace)) : '—';
@@ -779,21 +885,30 @@
       document.getElementById('bdOver').textContent         = over     > 0 ? fmt(Math.round(over))     : '—';
       document.getElementById('signalBox').innerHTML        = signalMsg;
 
+      lastTechResult = {
+        mode: 'tech', provider, gpuType, gpuCount, modelSize, quant,
+        workload, seqLen, batchSize,
+        wasteRange: total === 0 ? 'Correctly provisioned' : `${fmt(totalLow)} — ${fmt(totalHigh)}`,
+        signal: signalMsg.replace(/<[^>]+>/g, ''),
+      };
+
+      updateURL('tech');
+      resetLeadForm('tech');
+
       document.getElementById('techResults').style.display = 'block';
       document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // ── CFO / Quick Estimate calculation ────────────────────
-    // Maps simplified tier and use-case selectors to real GPU specs and model
-    // sizes, then runs the same memory-based fit logic as the technical mode.
     const CFO_GPU_MAP = {
-      'entry':   { key: 'l4',      mem: 24,  label: 'L4 (24GB)'    },
-      'mid':     { key: 'a100-40', mem: 40,  label: 'A100 40GB'    },
-      'highend': { key: 'h100',    mem: 80,  label: 'H100 (80GB)'  },
+      'entry':   { key: 'l4',      mem: 24,  label: 'L4 (24GB)'      },
+      'mid':     { key: 'a100-40', mem: 40,  label: 'A100 40GB'      },
+      'highend': { key: 'h100',    mem: 80,  label: 'H100 (80GB)'    },
+      'h200':    { key: 'h200',    mem: 141, label: 'H200 (141GB)'   },
       'mi300x':  { key: 'mi300x',  mem: 192, label: 'MI300X (192GB)' },
     };
+
     const CFO_USE_CASES = {
-      // quant reflects typical production deployment, not worst case
       'small':    { modelSize: '13b', quant: 'int8', label: 'Small models (7B–13B)', training: false },
       'large':    { modelSize: '70b', quant: 'fp16', label: 'Large models (70B+)',   training: false },
       'training': { modelSize: '70b', quant: 'fp16', label: 'Training workloads',    training: true  },
@@ -811,20 +926,19 @@
         return;
       }
 
-      const annual      = monthly * 12;
-      const gpuSpec     = CFO_GPU_MAP[gpuTier];
-      const useCfg      = CFO_USE_CASES[useCase];
-      const gpuCost     = PROVIDER_COSTS[provider][gpuSpec.key];
-      const gpuMem      = gpuSpec.mem;
-      const modelMem    = MODEL_MEMORY[useCfg.modelSize][useCfg.quant];
-      // Derive implied node count from monthly spend and GPU hourly rate
+      const annual       = monthly * 12;
+      const gpuSpec      = CFO_GPU_MAP[gpuTier];
+      const useCfg       = CFO_USE_CASES[useCase];
+      const gpuCost      = PROVIDER_COSTS[provider][gpuSpec.key];
+      const gpuMem       = gpuSpec.mem;
+      const modelMem     = MODEL_MEMORY[useCfg.modelSize][useCfg.quant];
       const impliedNodes = Math.max(1, Math.round(monthly / (gpuCost * 730)));
 
       let misplace = 0, oom = 0, over = 0, signalMsg = '';
       let minGpu = null, minCost = gpuCost, delta = 0;
 
       if (useCfg.training) {
-        const wastePct = gpuTier === 'highend' ? 0.20 : 0.15;
+        const wastePct = (gpuTier === 'highend' || gpuTier === 'h200') ? 0.20 : 0.15;
         misplace = annual * wastePct;
         signalMsg = `Training fleets typically waste 15–20% through job scheduling gaps, checkpoint I/O stalls, and idle replicas between runs. ` +
           `On ${gpuSpec.label} hardware, fragmented allocation and reservation overhead add further cost. ` +
@@ -863,7 +977,6 @@
         }
       }
 
-      // ── Populate assumptions tooltip ─────────────────────────
       const quantLabel = useCfg.quant === 'int8' ? 'int8 — typical production' : 'fp16 — full precision';
       let aHtml =
         `<strong style="color:var(--text)">Assumptions</strong><br/>` +
@@ -886,10 +999,7 @@
       const wasteMid  = (totalLow + totalHigh) / 2;
       const wastePct  = annual > 0 ? Math.round((wasteMid / annual) * 100) : 0;
       const idleNodes = total > 0 ? Math.max(1, Math.round(wasteMid / (gpuCost * 8760))) : 0;
-
-      const monthlyFmt = monthly >= 1000
-        ? `$${(monthly / 1000).toFixed(0)}k/mo`
-        : `$${Math.round(monthly)}/mo`;
+      const monthlyFmt = monthly >= 1000 ? `$${(monthly/1000).toFixed(0)}k/mo` : `$${Math.round(monthly)}/mo`;
 
       if (total === 0) {
         document.getElementById('cfoWasteRange').textContent = 'Run a Free Scan';
@@ -903,9 +1013,122 @@
         document.getElementById('cfoNodes').textContent      = `~${idleNodes}`;
       }
 
-      document.getElementById('cfoSignal').innerHTML  = signalMsg;
+      document.getElementById('cfoSignal').innerHTML = signalMsg;
+
+      lastCfoResult = {
+        mode: 'cfo', provider, gpuTier, useCase, monthly,
+        wasteRange: total === 0 ? 'Correctly provisioned' : `${fmt(totalLow)} — ${fmt(totalHigh)}`,
+        wastePct: total === 0 ? '—' : `~${wastePct}%`,
+        signal: signalMsg.replace(/<[^>]+>/g, ''),
+      };
+
+      updateURL('cfo');
+      resetLeadForm('cfo');
+
       document.getElementById('cfoResults').style.display = 'block';
       document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ── URL sharing ──────────────────────────────────────────
+    function updateURL(mode) {
+      const params = new URLSearchParams({ mode });
+      if (mode === 'cfo') {
+        params.set('monthly', document.getElementById('monthlySpend').value);
+        params.set('provider', document.getElementById('cfoProvider').value);
+        params.set('tier', document.getElementById('gpuTier').value);
+        params.set('useCase', document.getElementById('cfoUseCase').value);
+      } else {
+        params.set('provider', document.getElementById('cloudProvider').value);
+        params.set('gpuCount', document.getElementById('gpuCount').value);
+        params.set('gpuType', document.getElementById('gpuType').value);
+        params.set('modelSize', document.getElementById('modelSize').value);
+        params.set('quant', document.getElementById('quantization').value);
+        params.set('workload', document.getElementById('workloadType').value);
+        params.set('seqLen', document.getElementById('seqLen').value);
+        params.set('batch', document.getElementById('batchSize').value);
+      }
+      history.replaceState(null, '', '?' + params.toString());
+    }
+
+    function loadFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has('mode')) return;
+
+      const mode = params.get('mode');
+      const set  = (id, val) => { if (val && document.getElementById(id)) document.getElementById(id).value = val; };
+
+      if (mode === 'cfo') {
+        setMode('cfo');
+        set('monthlySpend', params.get('monthly'));
+        set('cfoProvider',  params.get('provider'));
+        set('gpuTier',      params.get('tier'));
+        set('cfoUseCase',   params.get('useCase'));
+        calculateCfo();
+      } else {
+        setMode('tech');
+        set('cloudProvider', params.get('provider'));
+        set('gpuCount',      params.get('gpuCount'));
+        set('gpuType',       params.get('gpuType'));
+        set('modelSize',     params.get('modelSize'));
+        set('quantization',  params.get('quant'));
+        set('workloadType',  params.get('workload'));
+        set('seqLen',        params.get('seqLen'));
+        set('batchSize',     params.get('batch'));
+        updateGpuPrices();
+        calculate();
+      }
+    }
+
+    function copyShareLink(mode) {
+      const url = window.location.href;
+      const btnId = mode === 'cfo' ? 'shareBtnCfo' : 'shareBtnTech';
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = document.getElementById(btnId);
+        btn.textContent = '✓ Link copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = '🔗 Copy shareable link';
+          btn.classList.remove('copied');
+        }, 2500);
+      });
+    }
+
+    // ── Lead capture ─────────────────────────────────────────
+    function resetLeadForm(mode) {
+      const suffix = mode === 'cfo' ? 'Cfo' : 'Tech';
+      document.getElementById('leadEmail' + suffix).value = '';
+      document.getElementById('leadSuccess' + suffix).style.display = 'none';
+      document.getElementById('leadError' + suffix).style.display   = 'none';
+    }
+
+    async function submitLead(mode) {
+      const suffix    = mode === 'cfo' ? 'Cfo' : 'Tech';
+      const email     = document.getElementById('leadEmail' + suffix).value.trim();
+      const successEl = document.getElementById('leadSuccess' + suffix);
+      const errorEl   = document.getElementById('leadError' + suffix);
+      const result    = mode === 'cfo' ? lastCfoResult : lastTechResult;
+
+      if (!email || !email.includes('@') || !result) return;
+      successEl.style.display = 'none';
+      errorEl.style.display   = 'none';
+
+      const payload = { email, calculator: 'GPU Efficiency Calculator', ...result };
+
+      try {
+        const res = await fetch(FORMSPREE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          successEl.style.display = 'block';
+          gtag('event', 'lead_capture', { email_domain: email.split('@')[1], calculator: 'efficiency' });
+        } else {
+          errorEl.style.display = 'block';
+        }
+      } catch {
+        errorEl.style.display = 'block';
+      }
     }
 
     // ── Assumptions tooltip ──────────────────────────────────
@@ -921,14 +1144,16 @@
 
     // ── Mode toggle ──────────────────────────────────────────
     function setMode(mode) {
+      currentMode = mode;
       document.getElementById('cfoForm').style.display  = mode === 'cfo'  ? 'block' : 'none';
       document.getElementById('techForm').style.display = mode === 'tech' ? 'block' : 'none';
-      // Hide results when switching so user recalculates in new mode
       document.getElementById('cfoResults').style.display  = 'none';
       document.getElementById('techResults').style.display = 'none';
       document.getElementById('tabCfo').classList.toggle('active',  mode === 'cfo');
       document.getElementById('tabTech').classList.toggle('active', mode === 'tech');
     }
+
+    window.addEventListener('DOMContentLoaded', loadFromURL);
   </script>
 
 </body>
