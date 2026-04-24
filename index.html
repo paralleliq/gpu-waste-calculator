@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GPU Efficiency Calculator — Paralleliq</title>
+  <title>GPU Waste Calculator — Paralleliq</title>
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-KSJPQGBGST"></script>
@@ -443,7 +443,7 @@
 
   <header>
     <img src="logo.png" alt="Paralleliq" />
-    <h1>GPU Efficiency Calculator</h1>
+    <h1>GPU Waste Calculator</h1>
     <p>Estimate how much your inference fleet could recover through rightsizing — misplacement, over-provisioning, and OOM risk.</p>
   </header>
 
@@ -1112,7 +1112,7 @@
       successEl.style.display = 'none';
       errorEl.style.display   = 'none';
 
-      const payload = { email, calculator: 'GPU Efficiency Calculator', ...result };
+      const payload = { email, calculator: 'GPU Waste Calculator', ...result };
 
       try {
         const res = await fetch(FORMSPREE_URL, {
