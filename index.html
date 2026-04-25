@@ -451,12 +451,12 @@
 
     <!-- ── Mode tabs ── -->
     <div class="mode-tabs">
-      <button class="tab"        id="tabCfo"  onclick="setMode('cfo')">Quick Estimate</button>
-      <button class="tab active" id="tabTech" onclick="setMode('tech')">Technical</button>
+      <button class="tab active" id="tabCfo"  onclick="setMode('cfo')">Quick Estimate</button>
+      <button class="tab"        id="tabTech" onclick="setMode('tech')">Technical</button>
     </div>
 
     <!-- ── Quick Estimate (CFO) form ── -->
-    <div id="cfoForm" style="display:none">
+    <div id="cfoForm">
       <div class="form-grid">
 
         <div class="field full">
@@ -507,7 +507,7 @@
     </div>
 
     <!-- ── Technical form ── -->
-    <div id="techForm">
+    <div id="techForm" style="display:none">
       <div class="form-grid">
 
         <div class="field full">
@@ -776,7 +776,7 @@
     // Last results for lead capture
     let lastCfoResult  = null;
     let lastTechResult = null;
-    let currentMode    = 'tech';
+    let currentMode    = 'cfo';
 
     // ── Helpers ──────────────────────────────────────────────
     function fmt(n) {
@@ -1168,13 +1168,7 @@
       document.getElementById('tabTech').classList.toggle('active', mode === 'tech');
     }
 
-    window.addEventListener('DOMContentLoaded', function() {
-      loadFromURL();
-      // Auto-calculate technical tab on fresh page load (no URL params)
-      if (!new URLSearchParams(window.location.search).has('mode')) {
-        calculate({ noScroll: true });
-      }
-    });
+    window.addEventListener('DOMContentLoaded', loadFromURL);
   </script>
 
 </body>
