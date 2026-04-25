@@ -451,12 +451,12 @@
 
     <!-- ── Mode tabs ── -->
     <div class="mode-tabs">
-      <button class="tab active" id="tabCfo"  onclick="setMode('cfo')">Quick Estimate</button>
-      <button class="tab"        id="tabTech" onclick="setMode('tech')">Technical</button>
+      <button class="tab"        id="tabCfo"  onclick="setMode('cfo')">Quick Estimate</button>
+      <button class="tab active" id="tabTech" onclick="setMode('tech')">Technical</button>
     </div>
 
     <!-- ── Quick Estimate (CFO) form ── -->
-    <div id="cfoForm">
+    <div id="cfoForm" style="display:none">
       <div class="form-grid">
 
         <div class="field full">
@@ -507,7 +507,7 @@
     </div>
 
     <!-- ── Technical form ── -->
-    <div id="techForm" style="display:none">
+    <div id="techForm">
       <div class="form-grid">
 
         <div class="field full">
@@ -776,7 +776,7 @@
     // Last results for lead capture
     let lastCfoResult  = null;
     let lastTechResult = null;
-    let currentMode    = 'cfo';
+    let currentMode    = 'tech';
 
     // ── Helpers ──────────────────────────────────────────────
     function fmt(n) {
