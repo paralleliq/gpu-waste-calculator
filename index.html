@@ -793,7 +793,8 @@
     }
 
     // ── Technical calculation ────────────────────────────────
-    function calculate() {
+    function calculate(opts) {
+      const noScroll = opts && opts.noScroll;
       const gpuCount  = Math.max(1, parseInt(document.getElementById('gpuCount').value) || 1);
       const gpuType   = document.getElementById('gpuType').value;
       const modelSize = document.getElementById('modelSize').value;
@@ -902,7 +903,7 @@
       resetLeadForm('tech');
 
       document.getElementById('techResults').style.display = 'block';
-      document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!noScroll) document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // ── CFO / Quick Estimate calculation ────────────────────
@@ -1167,7 +1168,13 @@
       document.getElementById('tabTech').classList.toggle('active', mode === 'tech');
     }
 
-    window.addEventListener('DOMContentLoaded', loadFromURL);
+    window.addEventListener('DOMContentLoaded', function() {
+      loadFromURL();
+      // Auto-calculate technical tab on fresh page load (no URL params)
+      if (!new URLSearchParams(window.location.search).has('mode')) {
+        calculate({ noScroll: true });
+      }
+    });
   </script>
 
 </body>
