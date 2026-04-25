@@ -658,7 +658,13 @@
       <div id="techResults" style="display:none">
         <hr class="divider" />
         <div class="results-label">Recoverable GPU Spend</div>
-        <div class="waste-amount" id="wasteRange">—</div>
+        <div class="waste-header">
+          <div class="waste-amount" id="wasteRange">—</div>
+          <div class="tooltip-wrap" id="techTooltipWrap">
+            <button class="tooltip-icon" onclick="toggleTechTooltip(event)">ⓘ</button>
+            <div class="tooltip-body" id="techTooltipBody">Waste factors based on industry benchmarks for GPU underutilization patterns (model misplacement, idle replicas, scheduling gaps). Actual waste varies by cluster — run a free scan for cluster-specific data.</div>
+          </div>
+        </div>
         <div class="waste-sub" id="wasteSub">per year across your fleet</div>
         <div class="breakdown">
           <div class="breakdown-item">
@@ -990,6 +996,7 @@
       } else if (misplace > 0 || oom > 0) {
         aHtml += `<br/>Issue:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${modelMem}GB required > ${gpuMem}GB available`;
       }
+      aHtml += `<br/><br/><span style="color:var(--muted);font-size:0.75rem">Waste factors based on industry benchmarks for GPU underutilization patterns (model misplacement, idle replicas, scheduling gaps). Actual waste varies by cluster — run a free scan for cluster-specific data.</span>`;
       document.getElementById('assumptionsBody').innerHTML = aHtml;
       document.getElementById('assumptionsWrap').classList.remove('open');
 
@@ -1137,9 +1144,16 @@
       document.getElementById('assumptionsWrap').classList.toggle('open');
     }
 
+    function toggleTechTooltip(e) {
+      e.stopPropagation();
+      document.getElementById('techTooltipWrap').classList.toggle('open');
+    }
+
     document.addEventListener('click', function() {
       const w = document.getElementById('assumptionsWrap');
       if (w) w.classList.remove('open');
+      const t = document.getElementById('techTooltipWrap');
+      if (t) t.classList.remove('open');
     });
 
     // ── Mode toggle ──────────────────────────────────────────
