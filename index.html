@@ -662,7 +662,7 @@
           <div class="waste-amount" id="wasteRange">—</div>
           <div class="tooltip-wrap" id="techTooltipWrap">
             <button class="tooltip-icon" onclick="toggleTechTooltip(event)">ⓘ</button>
-            <div class="tooltip-body" id="techTooltipBody">Waste factors based on industry benchmarks for GPU underutilization patterns (model misplacement, idle replicas, scheduling gaps). Actual waste varies by cluster — run a free scan for cluster-specific data.</div>
+            <div class="tooltip-body" id="techTooltipBody">Waste factors based on industry benchmarks<br/>for GPU underutilization patterns<br/>(model misplacement, idle replicas, scheduling gaps).<br/><br/>Actual waste varies by cluster —<br/>run a free scan for cluster-specific data.</div>
           </div>
         </div>
         <div class="waste-sub" id="wasteSub">per year across your fleet</div>
@@ -996,7 +996,7 @@
       } else if (misplace > 0 || oom > 0) {
         aHtml += `<br/>Issue:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${modelMem}GB required > ${gpuMem}GB available`;
       }
-      aHtml += `<br/><br/><span style="color:var(--muted);font-size:0.75rem">Waste factors based on industry benchmarks for GPU underutilization patterns (model misplacement, idle replicas, scheduling gaps). Actual waste varies by cluster — run a free scan for cluster-specific data.</span>`;
+      aHtml += `<br/><br/><span style="color:var(--muted);font-size:0.75rem">Waste factors based on industry benchmarks<br/>for GPU underutilization patterns<br/>(model misplacement, idle replicas, scheduling gaps).<br/><br/>Actual waste varies by cluster —<br/>run a free scan for cluster-specific data.</span>`;
       document.getElementById('assumptionsBody').innerHTML = aHtml;
       document.getElementById('assumptionsWrap').classList.remove('open');
 
