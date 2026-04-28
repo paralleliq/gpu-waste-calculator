@@ -489,8 +489,10 @@
           <label>GPU Tier</label>
           <div class="select-wrap">
             <select id="gpuTier">
-              <option value="entry">Entry — T4 / L4</option>
-              <option value="mid">Mid — A10 / A100 40GB</option>
+              <option value="entry-t4">Entry — T4 (16GB)</option>
+              <option value="entry">Entry — L4 (24GB)</option>
+              <option value="mid-a10">Mid — A10 (24GB)</option>
+              <option value="mid">Mid — A100 40GB</option>
               <option value="highend">High-end — A100 80GB / H100</option>
               <option value="h200">Latest — H200 (141GB)</option>
               <option value="mi300x">AMD MI300X (192GB)</option>
@@ -926,8 +928,10 @@
 
     // ── CFO / Quick Estimate calculation ────────────────────
     const CFO_GPU_MAP = {
-      'entry':   { key: 'l4',      mem: 24,  label: 'L4 (24GB)'      },
-      'mid':     { key: 'a100-40', mem: 40,  label: 'A100 40GB'      },
+      'entry-t4': { key: 't4',      mem: 16,  label: 'T4 (16GB)'       },
+      'entry':    { key: 'l4',      mem: 24,  label: 'L4 (24GB)'      },
+      'mid-a10':  { key: 'a10',     mem: 24,  label: 'A10 (24GB)'     },
+      'mid':      { key: 'a100-40', mem: 40,  label: 'A100 40GB'      },
       'highend': { key: 'h100',    mem: 80,  label: 'H100 (80GB)'    },
       'h200':    { key: 'h200',    mem: 141, label: 'H200 (141GB)'   },
       'mi300x':  { key: 'mi300x',  mem: 192, label: 'MI300X (192GB)' },
@@ -991,9 +995,9 @@
         if (minGpu && minCost < gpuCost * 0.92) {
           delta = gpuCost - minCost;
           over  = impliedNodes * delta * 8760;
-          signalMsg = `${MODEL_LABELS[useCfg.modelSize]} models fit comfortably on a <strong>${minGpu.label} at $${minCost.toFixed(2)}/hr</strong>, ` +
+          signalMsg = `${MODEL_LABELS[useCfg.modelSize]} models at <strong>${QUANT_LABELS[useCfg.quant]}</strong> fit on a <strong>${minGpu.label} at $${minCost.toFixed(2)}/hr</strong>, ` +
             `but you're running ${gpuSpec.label} at $${gpuCost.toFixed(2)}/hr — a <strong>$${delta.toFixed(2)}/hr delta per node.</strong> ` +
-            `This may be intentional for headroom or latency SLOs, but predictive autoscaling on lower-tier hardware ` +
+            `This may be intentional for headroom, latency SLOs, or higher-precision inference — but predictive autoscaling on lower-tier hardware ` +
             `is often more cost-effective than permanent vertical over-provisioning.`;
         } else {
           signalMsg = `Your GPU tier is a reasonable fit for this workload. Waste at this level typically comes from ` +
