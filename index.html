@@ -1191,6 +1191,87 @@
     }
 
     window.addEventListener('DOMContentLoaded', loadFromURL);
+
+    // ── GA4 custom event tracking ─────────────────────────────────────────────
+
+    window.addEventListener('DOMContentLoaded', function () {
+
+      // Tab switch: Quick Estimate vs Technical
+      document.getElementById('tabCfo').addEventListener('click', function () {
+        gtag('event', 'tab_switch', { tab: 'quick_estimate' });
+      });
+      document.getElementById('tabTech').addEventListener('click', function () {
+        gtag('event', 'tab_switch', { tab: 'technical' });
+      });
+
+      // CFO mode inputs
+      document.getElementById('monthlySpend').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'quick_estimate', field: 'monthly_spend', value: this.value });
+      });
+      document.getElementById('cfoProvider').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'quick_estimate', field: 'provider', value: this.value });
+      });
+      document.getElementById('gpuTier').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'quick_estimate', field: 'gpu_tier', value: this.value });
+      });
+      document.getElementById('cfoUseCase').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'quick_estimate', field: 'use_case', value: this.value });
+      });
+
+      // Technical mode inputs
+      document.getElementById('cloudProvider').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'technical', field: 'cloud_provider', value: this.value });
+      });
+      document.getElementById('gpuCount').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'technical', field: 'gpu_count', value: this.value });
+      });
+      document.getElementById('gpuType').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'technical', field: 'gpu_type', value: this.value });
+      });
+      document.getElementById('modelSize').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'technical', field: 'model_size', value: this.value });
+      });
+      document.getElementById('quantization').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'technical', field: 'quantization', value: this.value });
+      });
+      document.getElementById('workloadType').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'technical', field: 'workload_type', value: this.value });
+      });
+      document.getElementById('batchSize').addEventListener('change', function () {
+        gtag('event', 'input_changed', { mode: 'technical', field: 'batch_size', value: this.value });
+      });
+
+      // Calculate button clicks
+      document.querySelector('button[onclick="calculateCfo()"]').addEventListener('click', function () {
+        gtag('event', 'calculate_clicked', { mode: 'quick_estimate' });
+      });
+      document.querySelector('button[onclick="calculate()"]').addEventListener('click', function () {
+        gtag('event', 'calculate_clicked', { mode: 'technical' });
+      });
+
+      // Share link copies
+      document.getElementById('shareBtnCfo').addEventListener('click', function () {
+        gtag('event', 'share_link_copied', { mode: 'quick_estimate' });
+      });
+      document.getElementById('shareBtnTech').addEventListener('click', function () {
+        gtag('event', 'share_link_copied', { mode: 'technical' });
+      });
+
+      // Results viewed — fires when results scroll into view
+      const resultsEl = document.getElementById('results');
+      if (resultsEl && 'IntersectionObserver' in window) {
+        let resultsFired = false;
+        new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting && !resultsFired) {
+              resultsFired = true;
+              gtag('event', 'results_viewed');
+            }
+          });
+        }, { threshold: 0.5 }).observe(resultsEl);
+      }
+
+    });
   </script>
 
 </body>
