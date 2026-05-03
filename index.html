@@ -1069,6 +1069,7 @@
         workload, seqLen, batchSize,
         wasteRange: total === 0 ? 'Correctly provisioned' : `${fmt(totalLow)} — ${fmt(totalHigh)}`,
         signal: signalMsg.replace(/<[^>]+>/g, ''),
+        recommendations: techActions.map((a, i) => `${i + 1}. ${a.text.replace(/<[^>]+>/g, '')}`).join('\n'),
       };
 
       updateURL('tech');
@@ -1224,6 +1225,7 @@
         wasteRange: total === 0 ? 'Correctly provisioned' : `${fmt(totalLow)} — ${fmt(totalHigh)}`,
         wastePct: total === 0 ? '—' : `~${wastePct}%`,
         signal: signalMsg.replace(/<[^>]+>/g, ''),
+        recommendations: cfoActions.map((a, i) => `${i + 1}. ${a.text.replace(/<[^>]+>/g, '')}`).join('\n'),
       };
 
       updateURL('cfo');
