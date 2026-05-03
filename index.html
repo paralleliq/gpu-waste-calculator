@@ -315,6 +315,60 @@
       border-left: 2px solid var(--border);
     }
 
+    /* ── Remediation actions ─────────────────────────────────── */
+    .remediation-block { margin-bottom: 20px; }
+
+    .remediation-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+
+    .remediation-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .remediation-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.88rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .ri-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(74,108,247,0.15);
+      border: 1px solid rgba(74,108,247,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: var(--blue);
+      font-weight: 700;
+      margin-top: 1px;
+    }
+
+    .remediation-item.urgent .ri-icon {
+      background: rgba(248,113,113,0.15);
+      border-color: rgba(248,113,113,0.4);
+      color: #f87171;
+    }
+
     .signal-box {
       background: linear-gradient(135deg, rgba(123,53,212,0.12), rgba(0,196,196,0.08));
       border: 1px solid rgba(74,108,247,0.25);
@@ -638,6 +692,7 @@
           </div>
         </div>
         <div class="signal-box" id="cfoSignal"></div>
+        <div class="remediation-block" id="cfoRemediation" style="display:none"></div>
 
         <div class="cta-section" style="margin-bottom:8px">
           <p>Want the full ROI picture — ops costs, payback period, and 3-year comparison?<br/>
@@ -700,6 +755,7 @@
           </div>
         </div>
         <div class="signal-box" id="signalBox"></div>
+        <div class="remediation-block" id="techRemediation" style="display:none"></div>
         <div class="caveat" id="kvCaveat"></div>
 
         <div class="cta-section" style="margin-bottom:8px">
@@ -798,6 +854,77 @@
     let lastTechResult = null;
     let currentMode    = 'cfo';
 
+    // ── Remediation actions builder ──────────────────────────
+    function buildRemediationHtml(actions) {
+      if (!actions || !actions.length) return '';
+      const items = actions.map((a, i) =>
+        `<li class="remediation-item${a.urgent ? ' urgent' : ''}">
+          <span class="ri-icon">${a.urgent ? '!' : i + 1}</span>
+          <span>${a.text}</span>
+        </li>`
+      ).join('');
+      return `<div class="remediation-title">Recommended Actions</div><ul class="remediation-list">${items}</ul>`;
+    }
+
+    function renderRemediation(elId, actions) {
+      const el = document.getElementById(elId);
+      if (!actions || !actions.length) { el.style.display = 'none'; return; }
+      el.innerHTML = buildRemediationHtml(actions);
+      el.style.display = 'block';
+    }
+
+    function getRemediationActions({ scenario, gpuLabel, gpuMem, modelLabel, quantLabel, modelMemFp16, modelMemInt4, minGpuLabel, minGpuCostPerHr, gpuCostPerHr, deltaPerHr, nodes, seqLen, batchSize, kvCacheGB, weightHeadroom, provider }) {
+      const providerLabel = (provider || 'gcp').toUpperCase();
+      if (scenario === 'severe-mismatch') {
+        const int4MinFit = getMinFitGpu(modelMemInt4);
+        return [
+          { urgent: true, text: `Move to a multi-GPU setup with NVLink — ${modelLabel} at fp16 requires ~${modelMemFp16}GB. Minimum: 2× A100-80GB or 2× H100 with tensor parallelism. Single-GPU attempts will OOM.` },
+          { text: `Quantize to INT4 (GPTQ/AWQ) — reduces VRAM from ~${modelMemFp16}GB to ~${modelMemInt4}GB${int4MinFit ? ', fits on a single ' + int4MinFit.label : ', still requires multi-GPU'}. Some quality tradeoff.` },
+          { text: `Consider H200 (141GB) or MI300X (192GB) — runs ${modelLabel} at full fp16 precision on a single GPU, eliminating tensor parallelism overhead and inter-GPU communication latency.` },
+          { text: `Run piqc to measure actual OOM kill frequency and the cost of failed inference requests across your fleet.` },
+        ];
+      }
+      if (scenario === 'mismatch') {
+        return [
+          { urgent: true, text: `Upgrade to ${minGpuLabel || 'a larger GPU'} — minimum GPU that fits ${modelLabel} at ${quantLabel} (${modelMemFp16}GB required, ${gpuLabel} only has ${gpuMem}GB).` },
+          { text: `Quantize to INT4 (GPTQ/AWQ) if not already — reduces VRAM requirement to ~${modelMemInt4}GB${getMinFitGpu(modelMemInt4) ? ', fits on ' + getMinFitGpu(modelMemInt4).label : ''}. Expect slight quality tradeoff.` },
+          { text: `If using vLLM, set --gpu-memory-utilization 0.85 and reduce --max-model-len to avoid OOM crashes while you plan the migration.` },
+          { text: `Run piqc to see actual OOM kill frequency and cost of failed requests in production.` },
+        ];
+      }
+      if (scenario === 'over-provisioned') {
+        return [
+          { urgent: true, text: `Rightsize to ${minGpuLabel} — saves $${deltaPerHr}/hr per node ($${Math.round(deltaPerHr * 8760 * (nodes || 1)).toLocaleString()}/yr across ${nodes || 1} node${(nodes || 1) > 1 ? 's' : ''} on ${providerLabel}).` },
+          { text: `Validate p95 latency SLO on ${minGpuLabel} before migrating — run a canary deployment with real traffic to confirm throughput is sufficient.` },
+          { text: `Consider horizontal scaling on ${minGpuLabel} instead — more replicas on lower-tier GPUs often gives better throughput and resilience than one over-provisioned node.` },
+          { text: `Run piqc to confirm actual GPU utilization before migrating — ensure the headroom on ${gpuLabel} is not being used by peak traffic or KV cache growth.` },
+        ];
+      }
+      if (scenario === 'kv-oom') {
+        return [
+          { urgent: true, text: `Reduce peak concurrent batch size (currently ${batchSize}) — KV cache at this load (~${kvCacheGB.toFixed(1)}GB) exceeds available headroom (${weightHeadroom.toFixed(1)}GB after weights).` },
+          { urgent: true, text: `Reduce max sequence length (currently ${seqLen.toLocaleString()} tokens) — shorter sequences shrink KV cache proportionally.` },
+          { text: `Enable KV cache quantization (int8 KV) in vLLM — halves KV cache memory with minimal quality impact. Set --kv-cache-dtype fp8 or int8.` },
+          { text: `Move to a GPU with more VRAM headroom — at least ${Math.ceil(modelMemFp16 + kvCacheGB + 4)}GB total recommended for this batch/seq profile.` },
+        ];
+      }
+      if (scenario === 'kv-tight') {
+        return [
+          { text: `Monitor KV cache utilization in vLLM metrics (vllm:gpu_cache_usage_perc) — at ${Math.round((kvCacheGB / weightHeadroom) * 100)}% headroom used, traffic spikes can trigger OOM.` },
+          { text: `Set a KV cache usage alert at 80% — gives you time to reduce batch size or sequence length before hitting the ceiling.` },
+          { text: `Enable PagedAttention block size tuning in vLLM (--block-size 16 or 32) — smaller blocks reduce fragmentation and improve headroom.` },
+          { text: `Run piqc to see actual runtime headroom across all pods — estimates assume uniform batch; real traffic patterns may leave more slack.` },
+        ];
+      }
+      // correct fit
+      return [
+        { text: `Run piqc to check idle replicas, configuration drift, and dark capacity across your full fleet — single-GPU pairing is correct but fleet-level waste is often hidden.` },
+        { text: `Review batching configuration — low concurrent batch sizes under-utilize GPU compute even when VRAM fit is correct. Target 60–80% KV cache utilization.` },
+        { text: `Monitor MFU (Model FLOPS Utilization) in production — healthy range is 30–60%. Below 15% often indicates scheduling or batching inefficiency.` },
+        { text: `Consider predictive autoscaling — right-sized GPUs with dynamic replica count typically outperform static over-provisioning on cost per request.` },
+      ];
+    }
+
     // ── Helpers ──────────────────────────────────────────────
     function fmt(n) {
       if (n >= 1_000_000) return '$' + (n/1_000_000).toFixed(1) + 'M';
@@ -870,6 +997,30 @@
 
       if (kvExtra) signalMsg += '<br/><br/>' + kvExtra;
 
+      // Determine remediation scenario
+      let techScenario;
+      if (modelMem > 80 && gpuMem <= 80)                  techScenario = 'severe-mismatch';
+      else if (modelMem > gpuMem)                          techScenario = 'mismatch';
+      else if (minGpu && minCost < gpuCost * 0.92)         techScenario = 'over-provisioned';
+      else if (kvRatio > 1.0)                              techScenario = 'kv-oom';
+      else if (kvRatio > 0.70)                             techScenario = 'kv-tight';
+      else                                                 techScenario = 'correct';
+
+      const techActions = getRemediationActions({
+        scenario: techScenario,
+        gpuLabel: GPU_LABELS[gpuType], gpuMem,
+        modelLabel: MODEL_LABELS[modelSize], quantLabel: QUANT_LABELS[quant],
+        modelMemFp16: MODEL_MEMORY[modelSize]['fp16'],
+        modelMemInt4: MODEL_MEMORY[modelSize]['int4'],
+        minGpuLabel: minGpu ? minGpu.label : null,
+        minGpuCostPerHr: minCost,
+        gpuCostPerHr: gpuCost,
+        deltaPerHr: minGpu ? (gpuCost - minCost).toFixed(2) : 0,
+        nodes: gpuCount,
+        seqLen, batchSize, kvCacheGB, weightHeadroom,
+        provider,
+      });
+
       misplace *= wMult;
       oom      *= wMult;
       over     *= wMult;
@@ -911,6 +1062,7 @@
       document.getElementById('bdOom').textContent          = oom      > 0 ? fmt(Math.round(oom))      : '—';
       document.getElementById('bdOver').textContent         = over     > 0 ? fmt(Math.round(over))     : '—';
       document.getElementById('signalBox').innerHTML        = signalMsg;
+      renderRemediation('techRemediation', techActions);
 
       lastTechResult = {
         mode: 'tech', provider, gpuType, gpuCount, modelSize, quant,
@@ -1044,6 +1196,28 @@
       }
 
       document.getElementById('cfoSignal').innerHTML = signalMsg;
+
+      let cfoScenario;
+      if (useCfg.training)                                             cfoScenario = 'correct';
+      else if (modelMem > 80 && gpuMem <= 80)                         cfoScenario = 'severe-mismatch';
+      else if (modelMem > gpuMem)                                      cfoScenario = 'mismatch';
+      else if (minGpu && minCost < gpuCost * 0.92)                    cfoScenario = 'over-provisioned';
+      else                                                             cfoScenario = 'correct';
+
+      const cfoActions = getRemediationActions({
+        scenario: cfoScenario,
+        gpuLabel: gpuSpec.label, gpuMem,
+        modelLabel: MODEL_LABELS[useCfg.modelSize], quantLabel: QUANT_LABELS[useCfg.quant],
+        modelMemFp16: MODEL_MEMORY[useCfg.modelSize]['fp16'],
+        modelMemInt4: MODEL_MEMORY[useCfg.modelSize]['int4'],
+        minGpuLabel: minGpu ? minGpu.label : null,
+        minGpuCostPerHr: minCost,
+        gpuCostPerHr: gpuCost,
+        deltaPerHr: delta > 0 ? delta.toFixed(2) : 0,
+        nodes: impliedNodes,
+        provider,
+      });
+      renderRemediation('cfoRemediation', cfoActions);
 
       lastCfoResult = {
         mode: 'cfo', provider, gpuTier, useCase, monthly,
