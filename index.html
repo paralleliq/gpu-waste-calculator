@@ -797,7 +797,7 @@
   </footer>
 
   <script>
-    const FORMSPREE_URL = 'https://formspree.io/f/xyklnbgy';
+    const FORM_URL = 'https://api.web3forms.com/submit';
 
     // ── Provider pricing ────────────────────────────────────
     const PROVIDER_COSTS = {
@@ -1318,10 +1318,10 @@
       successEl.style.display = 'none';
       errorEl.style.display   = 'none';
 
-      const payload = { email, calculator: 'GPU Waste Calculator', ...result };
+      const payload = { access_key: '169d21e8-3750-4079-97ae-8de5198250d6', subject: 'Lead: GPU Waste Calculator', email, calculator: 'GPU Waste Calculator', ...result };
 
       try {
-        const res = await fetch(FORMSPREE_URL, {
+        const res = await fetch(FORM_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(payload),
